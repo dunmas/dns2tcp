@@ -65,7 +65,10 @@ typedef struct		s_simple_list {
   socket_t		fd_wo;
   process_t		pid;
   uint16_t      port;
+
+#ifndef _WIN32
   in_addr_t     address;
+#endif
   bool          is_local_port_forwarding;
   struct s_list		*queue; 
   struct s_list		*saved_queue; 
