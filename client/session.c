@@ -19,6 +19,7 @@
 */
 
 #include <string.h>
+#include <stdbool.h>
 
 #include "mycrypto.h"
 #include "client.h"

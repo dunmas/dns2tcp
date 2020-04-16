@@ -19,7 +19,7 @@ dns2tcpd_SOURCES =	\
 			dns_decode.c 		\
 			../common/mystrnlen.c 	\
 			../common/memdump.c 	\
-			../common/base64.c 	\
+			../common/base32.c 	\
 			socket.c 		\
 			options.c 		\
 			main.c

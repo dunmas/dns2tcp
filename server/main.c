@@ -167,7 +167,7 @@ int			main(int argc, char **argv)
     return (-1);
   openlog("dns2tcp", LOG_PID , LOG_SYSLOG);
   signal(SIGPIPE, SIG_IGN);
-  if (!bind_socket(conf))
+  if (!bind_socket_dns(conf))
     {
       LOG("Starting Server v%s...", VERSION);
       if (jail(conf))

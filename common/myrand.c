@@ -18,16 +18,16 @@
 ** Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-#include <stdlib.h>
-#include "config.h"
+//#include <stdlib.h>
+//#include "config.h"
 
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
+//#ifdef HAVE_SYS_TYPES_H
+//#include <sys/types.h>
+//#endif
 
-#ifdef HAVE_STDINT_H
+//#ifdef HAVE_STDINT_H
 #include <stdint.h>
-#endif
+//#endif
 
 #ifdef _WIN32
 #include "mywin32.h"

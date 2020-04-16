@@ -19,12 +19,13 @@
 */
 
 #include <string.h>
+#include <stdbool.h>
 #ifndef _WIN32
 #include <strings.h>
 #endif
 
 #include "client.h"
-#include "base64.h"
+#include "base32.h"
 #include "dns.h"
 #include "myrand.h"
 #include "list.h"
@@ -88,7 +89,7 @@ static int		add_query(struct dns_hdr *hdr, void *where, char *name,
 
 static void	data2qname(t_request *req, void *output)
 {
-  base64_encode((char *)req->req_data, output, req->len);
+  base32_encode((char *)req->req_data, output, req->len);
   strcat(output, ".");
   strcat(output, req->domain);
 #ifndef _WIN32
@@ -133,14 +134,14 @@ static int		create_request(t_conf *conf, void *output, t_request *req)
 
   hdr = (struct dns_hdr *) output; 
   create_req_hdr(conf, hdr);
-  if ((ENCODED_LEN(BASE64_SIZE(req->len)) + strlen(req->domain) + 2 ) > (MAX_HOST_NAME_ENCODED))
+  if ((ENCODED_LEN(BASE32_SIZE(req->len)) + strlen(req->domain) + 2 ) > (MAX_HOST_NAME_ENCODED))
     {
 #ifndef _WIN32
       fprintf(stderr, "send_query : data too long (%d bytes -> %zd bytes)\n", 
 #else
       fprintf(stderr, "send_query : data too long (%d bytes -> %d bytes)\n", 
 #endif
-	      req->len, ENCODED_LEN(BASE64_SIZE(req->len)) + strlen(req->domain) + 2 );
+	      req->len, ENCODED_LEN(BASE32_SIZE(req->len)) + strlen(req->domain) + 2 );
       return (0);
     }
   DPRINTF(3, "Sending dns id = 0x%x\n", ntohs(hdr->id)); 

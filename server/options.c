@@ -55,47 +55,11 @@ static int	check_mandatory_param(t_conf *conf)
 {
   if (!conf->port)
     conf->port = 53;
-  if (!conf->resources)
-    {
-      LOG("Need at least one resource \n");
-      return (-1);
-    }
   if (!conf->my_domain)
     {
       LOG("Need a domain name\n");
       return (-1);
     }
-  return (0);
-}
-
-/**
- * @brief add a ressource
- * @param[in] conf configuration
- * @param[in] value ressource to add
- * @retval 0 on success
- * @retval -1 on error
- **/
-
-static int	add_resource(t_conf *conf, char *value)
-{
-  t_list	*cell;
-  char		*port;
-  
-  if (!(port = strrchr(value, ':')))
-    return (-1);
-  *port++ = 0;
-  if (!strchr(value, ':'))
-    return (-1);
-  if (!(cell = list_create_cell()))
-    return (-1);
-  if (!conf->resources)
-    conf->resources = cell;
-  else
-    list_add_cell(conf->resources, cell);
-  strncpy(cell->data, value, MAX_DNS_LEN-1);
-  cell->info.port = atoi(port);
-  DPRINTF(1, "Add resource %s port %d\n", value,  cell->info.port);
-  free(value);
   return (0);
 }
 
@@ -140,13 +104,6 @@ static int	server_copy_param(void *my_conf, char *token, char *value)
 	return ((conf->pid_file = buffer) > 0);
       if (!strcmp(token, "listen"))
 	return ((conf->my_ip ? 0 : (conf->my_ip = buffer) > 0));
-      if (!strcmp(token, "resources"))
-	return (add_resource(conf, buffer));
-      if (!strcmp(token, "ressources"))
-	{
-	  fprintf(stderr, "Warning : Incorrect ressources syntax in config file (should be resources)\n");
-	  return (add_resource(conf, buffer));
-	}
     }
   if (buffer)
     free(buffer);

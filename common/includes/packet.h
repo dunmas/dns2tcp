@@ -32,6 +32,7 @@
 
 #include "list.h"
 #include "memdump.h"
+#include "base32.h"
 
 /* type */
 
@@ -51,8 +52,6 @@ Error MSG
 #define ERR_BAD_SEQ		"Bad seq number"
 
 
-#undef MIN
-#define MIN(a,b)	((a) > (b) ? (b) : (a))
 
 #define	PACKET_LEN	(sizeof(t_packet))
 

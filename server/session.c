@@ -102,6 +102,7 @@ t_simple_list		*create_session(t_conf *conf, t_request *req, t_packet *packet)
   client->saved_queue =  client->queue;
   client->num_seq = 1;
   client->sd_tcp = -1; /* No endpoint yet */
+  client->sd = -1; /* No endpoint yet */
   client_update_timer(client);
 
   if ((packet->type & USE_COMPRESS) == USE_COMPRESS)
@@ -147,11 +148,11 @@ int			session_request(t_conf *conf, t_request *req, t_data *data)
     return (req->cmd->deal_cmd(conf, req, packet, 0));
   client = find_client_by_session_id(conf, packet->session_id);
   /* ----- Authenticated user below ---- */
-  if ((!client) || (client->sd_tcp > 0))
-    {
-      packet->type = ERR;
-      return (send_ascii_reply(conf, req, packet, ERR_AUTH_FAILED));
-    }
+  //if ((!client) || (client->sd > 0))
+  //  {
+  //    packet->type = ERR;
+  //    return (send_ascii_reply(conf, req, packet, ERR_AUTH_FAILED));
+  //  }
   if (client && client->control.authenticated)
   /* deal_cmd is in request.c */
     return (req->cmd->deal_cmd(conf, req, packet, client));

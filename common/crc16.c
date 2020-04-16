@@ -19,15 +19,15 @@
 */
 
 #include <stdlib.h>
-#include "config.h"
+//#include "config.h"
 
-#ifdef HAVE_SYS_TYPES_H
-#include <sys/types.h>
-#endif
+//#ifdef HAVE_SYS_TYPES_H
+//#include <sys/types.h>
+//#endif
 
-#ifdef HAVE_STDINT_H
+//#ifdef HAVE_STDINT_H
 #include <stdint.h>
-#endif
+//#endif
 
 #ifdef _WIN32
 #include "mywin32.h"

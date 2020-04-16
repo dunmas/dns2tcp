@@ -22,6 +22,7 @@
 #define __LIST_H__
 
 #include <sys/types.h>
+#include <stdbool.h>
 #ifndef _WIN32
 #include <netinet/in.h>
 #include <sys/time.h>
@@ -59,9 +60,13 @@ typedef struct		s_simple_list {
   uint16_t		num_seq;	/* first seq acceptable */
   uint16_t		session_id;
 #define sd_tcp		fd_ro /* for server side compatibility */
+  socket_t      sd;
   socket_t		fd_ro;
   socket_t		fd_wo;
   process_t		pid;
+  uint16_t      port;
+  in_addr_t     address;
+  bool          is_local_port_forwarding;
   struct s_list		*queue; 
   struct s_list		*saved_queue; 
   struct s_simple_list	*next;

@@ -31,7 +31,7 @@ union	sockaddr_u			{
   struct sockaddr		sockaddr;
 };
 
-int connect_socket(char *, uint16_t, int *);
+int connect_socket(in_addr_t address, uint16_t port, int *sd);
 int bind_socket(t_conf *);
 
 #endif

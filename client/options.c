@@ -27,12 +27,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #ifndef _WIN32
 #include <strings.h>
 #include <unistd.h>
 #else
 #include "mywin32.h"
+#include <Windows.h>
 #include <iphlpapi.h>
 extern int	optind;
 extern char	*optarg;
@@ -55,25 +57,18 @@ int		getopt(int, char * const *, const char *);
 static void	usage(char *name)
 {
   fprintf(stderr,
-    "dns2tcp v%s ( http://www.hsc.fr/ )\n"
+    "dns2tcp \n"
     "Usage : %s [options] [server] \n"
     "\t-c         \t: enable compression\n"
     "\t-z <domain>\t: domain to use (mandatory)\n"
     "\t-d <1|2|3>\t: debug_level (1, 2 or 3)\n"
-    "\t-r <resource>\t: resource to access\n"
     "\t-k <key>\t: pre-shared key\n"
-    "\t-f <filename>\t: configuration file\n"
-#ifdef _WIN32
-    "\t-l <port|->\t: local port to bind (mandatory if resource defined without program )\n"
-#else
-    "\t-l <port|->\t: local port to bind, '-' is for stdin (mandatory if resource defined without program )\n"
-#endif
-    "\t-e <program>\t: program to execute\n"
     "\t-t <delay>\t: max DNS server's answer delay in seconds (default is 3)\n"
     "\t-T <TXT|KEY>\t: DNS request type (default is TXT)\n"
-    "\tserver\t: DNS server to use\n"
-    "\tIf no resources are specified, available resources will be printed\n",
-    VERSION, name);
+    "\t-L <local port>:<remote host>:<remote port>\t: Local port forwarding like -L plink option\n"
+    "\t-R <local port>:<remote host>:<remote port>\t: Remote port forwarding like -R plink option\n"
+    "\tserver\t: DNS server to use\n",
+    name);
 }
 
 /**
@@ -96,11 +91,17 @@ static int	check_mandatory_param(t_conf *conf)
       return (-1);
     }
   if (conf->resource)
-    if (! (conf->local_port || conf->cmdline || conf->output_file || conf->use_stdin))
-      {
-	fprintf(stderr, "Missing parameter : need a local port or a program to execute\n");
-	return (-1);
-      }
+	  if (!conf->remote_port)
+	  {
+	  fprintf(stderr, "Missing parameter : need a remote port (-p)\n");
+	  return (-1);
+	  }
+  if (conf->resource)
+	  if (!conf->remote_host)
+	  {
+	  fprintf(stderr, "Missing parameter : need a remote host (-h)\n");
+	  return (-1);
+	  }
   return (0);
 }
 
@@ -144,13 +145,6 @@ static int	client_copy_param(void *my_conf, char *token, char *value)
 	return ((int) (conf->domain ? 0 :  !!(conf->domain = buffer)));
       if (!strcmp(token, "key"))
 	return ((int) (conf->key ? 0 : !!(conf->key = buffer)));
-      if (!strcmp(token, "resource"))
-	return ((int) (conf->resource ? 0 : !!(conf->resource = buffer)));
-      if (!strcmp(token, "ressource"))
-	{
-	  fprintf(stderr, "Warning : Incorrect ressource syntax in config file (should be resource)\n");
-	  return ((int) (conf->resource ? 0 : !!(conf->resource = buffer)));
-	}
     }
   if (buffer)
     free(buffer);
@@ -234,7 +228,8 @@ static int      read_resolv(t_conf *conf)
 
 int			get_option(int argc, char **argv, t_conf *conf)
 {
-  int			c;
+  int			c, len;
+  char *tmp;
   char			config_file[CONFIG_FILE_LEN];
   
   memset(conf, 0, sizeof(t_conf));
@@ -242,47 +237,27 @@ int			get_option(int argc, char **argv, t_conf *conf)
   debug = 0;
   conf->conn_timeout = 3;
   conf->sd_tcp = -1;
+  conf->sd = -1;
   conf->disable_compression = 1;
   conf->query_functions = get_rr_function_by_name("TXT");
+  conf->is_local_port_forwarding = false;
   while (1)
     {
-      c = getopt (argc, argv, "ch:z:T:t:s:d:l:r:f:e:o:k:");
+      c = getopt (argc, argv, "cz:T:t:s:d:L:R:k:");
       if (c == -1)
 	  break;
       switch (c) {
-      case 'f':
-	if (strlen(optarg) > (CONFIG_FILE_LEN - 10))
-	  return (-1);
-	strncpy(config_file, optarg, CONFIG_FILE_LEN-1);
-	break;
       case 'z':
 	conf->domain = optarg;
 	break;
       case 'd':
 	debug = atoi(optarg);
 	break;
-      case 'e':
-	conf->cmdline = optarg;
-	break;
-      case 'o':
-	conf->output_file = optarg;
-	break;
       case 'k':
 	conf->key = optarg;
 	break;
       case 's':
 	conf->query_size = atoi(optarg);
-	break;
-      case 'r':
-	conf->resource = optarg;
-	break;
-      case 'l':
-#ifndef _WIN32
-	if (*optarg == '-')
-	  conf->use_stdin = 1;
-	else
-#endif
-	  conf->local_port = atoi(optarg);
 	break;
       case 'c':
 	conf->disable_compression = 0;
@@ -294,6 +269,48 @@ int			get_option(int argc, char **argv, t_conf *conf)
 	    return (-1);
 	  }
 	break;
+	  case 'L':
+		  conf->is_local_port_forwarding = true;
+	  case 'R':
+		tmp = strchr(optarg, ':');
+		if (tmp == NULL)
+		{
+			fprintf(stderr, "incorrect -L/-R option. See help for a tip\n");
+			return -1;
+		}
+		tmp[0] = '\0';
+		tmp++;
+		conf->local_port = atoi(optarg);
+		conf->remote_host = tmp;
+
+		tmp = strchr(tmp, ':');
+		if (tmp == NULL)
+		{
+			fprintf(stderr, "incorrect -L/-R option. See help for a tip\n");
+			return -1;
+		}
+		tmp[0] = '\0';
+		tmp++;
+		conf->remote_port = atoi(tmp);
+
+		memset(conf->resource, 0, sizeof(conf->resource));
+		if (conf->is_local_port_forwarding)
+		{
+			len = strlen(conf->remote_host);
+			strncpy(conf->resource, conf->remote_host, len + 1);
+			tmp = &conf->resource[len];
+			tmp[0] = ':';
+			tmp++;
+			sprintf(tmp, "%u", conf->remote_port);
+		}
+		else
+		{
+			sprintf(conf->resource, "%u", conf->local_port);
+		}
+		break;
+      case 'h':
+	conf->remote_host = optarg;
+	break;
       case 't':
 	c = atoi(optarg);
 	if ((c <= 0) || (c > 4*60))
@@ -304,14 +321,11 @@ int			get_option(int argc, char **argv, t_conf *conf)
 	  }
 	conf->conn_timeout = (uint8_t) c;
 	break;
-      case 'h':
       default:
 	usage(argv[0]);
 	return (-1);
       }
     }
-  if (optind < argc)
-      conf->dns_server = argv[optind];
   if ((*config_file) || (!conf->domain))
     /* we don't care if it read_config fails, config file may not
        exist */

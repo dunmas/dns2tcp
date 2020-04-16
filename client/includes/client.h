@@ -48,18 +48,23 @@ typedef struct		s_conf {
   char			*output_file;
 #ifdef _WIN32
   WSAEVENT		event_tcp;
+  WSAEVENT		event_tcpsd;
   WSAEVENT		event_udp;
 #endif
   socket_t		sd_udp;
   socket_t		sd_tcp;
+  socket_t		sd;
   uint16_t		local_port;
+  char			*remote_host;
+  uint16_t		remote_port;
   uint8_t		use_stdin;
   uint16_t		id;
   char			*domain;
   char			*key;
   struct s_rr_functions *query_functions;
   uint16_t		query_size;
-  char			*resource;
+  bool  		is_local_port_forwarding; // like -L option in plink
+  char			resource[100]; // ipv4:port or port
   uint8_t		disable_compression;
   uint8_t		conn_timeout;
 }			t_conf;

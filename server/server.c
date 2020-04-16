@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <sys/select.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <string.h>
 
@@ -47,28 +48,33 @@
 
 static int      prepare_select(t_conf *conf, fd_set *rfds, struct timeval *tv)
 {
-  int           max_fd = 0;
-  t_simple_list *client;
-
-  FD_ZERO(rfds);
-  client = conf->client;
-
-  while (client)
+    int           max_fd = 0;
+    t_simple_list *client;
+   
+    FD_ZERO(rfds);
+    client = conf->client;
+   
+    while (client)
     {
-      if ((client->sd_tcp != -1) && (!(client->control.queue_full)))
+        if (client->sd_tcp != -1)
         {
-          FD_SET(client->sd_tcp, rfds);
-          max_fd = MAX(max_fd, client->sd_tcp);
+            FD_SET(client->sd_tcp, rfds);
+            max_fd = MAX(max_fd, client->sd_tcp);
         }
-      client = client->next;
+        if ((client->sd != -1) && (!(client->control.queue_full)))
+        {
+            FD_SET(client->sd, rfds);
+            max_fd = MAX(max_fd, client->sd);
+        }
+        client = client->next;
     }
-  FD_SET(conf->sd_udp, rfds);
-  if (conf->foreground)
-    FD_SET(0, rfds);
-  max_fd = MAX(max_fd, conf->sd_udp);
-  tv->tv_sec = SOCKET_TIMEOUT;
-  tv->tv_usec = SOCKET_UTIMEOUT;
-  return (max_fd);
+    FD_SET(conf->sd_udp, rfds);
+    if (conf->foreground)
+        FD_SET(0, rfds);
+    max_fd = MAX(max_fd, conf->sd_udp);
+    tv->tv_sec = SOCKET_TIMEOUT;
+    tv->tv_usec = SOCKET_UTIMEOUT;
+    return (max_fd);
 }
 
 /**
@@ -79,29 +85,29 @@ static int      prepare_select(t_conf *conf, fd_set *rfds, struct timeval *tv)
 
 int		delete_client(t_conf *conf, t_simple_list *client)
 {
-  t_simple_list	*tmp;
-
-  if (conf->client == client)
+    t_simple_list	*tmp;
+  
+    if (conf->client == client)
     {
-      tmp = client->next;
-      LOG("delete_client 0x%x %s\n", client->session_id, 
-	  client->control.authenticated ? "" : "(not authenticated)");
-      delete_queue(client->saved_queue);      
-      list_destroy_simple_cell(conf->client);
-      conf->client = tmp;
-      return (0);
+        tmp = client->next;
+        LOG("delete_client 0x%x %s\n", client->session_id, 
+      	    client->control.authenticated ? "" : "(not authenticated)");
+        delete_queue(client->saved_queue);      
+        list_destroy_simple_cell(conf->client);
+        conf->client = tmp;
+        return (0);
     }
-  for (tmp = conf->client; tmp; tmp = tmp->next)
+    for (tmp = conf->client; tmp; tmp = tmp->next)
     {
-      if (tmp->next == client)
-	{
-	  tmp->next = client->next;
-	  LOG("delete_client 0x%x\n", client->session_id);
-	  delete_queue(client->saved_queue);
-	  return (list_destroy_simple_cell(client));
-	}
+        if (tmp->next == client)
+  	  {
+  	      tmp->next = client->next;
+  	      LOG("delete_client 0x%x\n", client->session_id);
+  	      delete_queue(client->saved_queue);
+  	      return (list_destroy_simple_cell(client));
+  	  }
     }
-  return (-1);
+    return (-1);
 }
 
 
@@ -125,7 +131,15 @@ void			delete_zombie(t_conf *conf)
 	if (tv.tv_sec > client->control.tv.tv_sec)
 	  {
 	    if (client->sd_tcp != -1)
+        {
 	      close(client->sd_tcp);
+          client->sd_tcp = -1;
+        }
+	    if (client->sd != -1)
+        {
+	      close(client->sd);
+          client->sd = -1;
+        }
 	    delete_client(conf, client);
 	  }
       }
@@ -140,66 +154,87 @@ void			delete_zombie(t_conf *conf)
 
 int			do_server(t_conf *conf)
 {
-  fd_set		rfds;
-  int			retval;
-  int			max_fd;
-  t_simple_list		*client;
-  t_simple_list		*tmp;
-  struct timeval	tv;
-  struct timezone	tz;
+    fd_set		rfds;
+    int			retval;
+    int			max_fd;
+    t_simple_list		*client;
+    t_simple_list		*tmp;
+    struct timeval	tv;
+    struct timezone	tz;
 
 #ifdef DEBUG
-  char		        buffer[MINI_BUFF];
+    char		        buffer[MINI_BUFF];
 #endif
 
-  while (1)
+    while (1)
     {     
-      max_fd = prepare_select(conf, &rfds, &tv);
-      retval = select(max_fd + 1 , &rfds, NULL, NULL, &tv);
-      queue_flush_expired_data(conf);
-      if (retval == -1)
-	{
-	  perror("");
-	  MYERROR("select");
-	  return (-1);
-	}
-      if (!retval)
-	{ 
-	  if (gettimeofday(&tv, &tz))
+        max_fd = prepare_select(conf, &rfds, &tv);
+        retval = select(max_fd + 1 , &rfds, NULL, NULL, &tv);
+        queue_flush_expired_data(conf);
+        if (retval == -1)
 	    {
-	      MYERROR("Time Error");
-	      return (-1);
+	        perror("select");
+	        MYERROR("select");
+	        return (-1);
 	    }
-	  delete_zombie(conf);
-	  continue;
-	}
+        if (!retval)
+	    { 
+	        if (gettimeofday(&tv, &tz))
+	        {
+	            MYERROR("Time Error");
+	            return (-1);
+	        }
+	        delete_zombie(conf);
+	        continue;
+	    }
 #ifdef DEBUG
-      if ((conf->foreground) && (FD_ISSET(0, &rfds)))
-	{
-	  read(0, buffer, MINI_BUFF); 
-	  queue_dump(conf->client);
-	  continue;
-	}
-#endif
-      if (FD_ISSET(conf->sd_udp, &rfds))
-	get_incoming_request(conf);
-      else
-	{
-	  for (client = conf->client;  client; client = tmp)
+        if ((conf->foreground) && (FD_ISSET(0, &rfds)))
 	    {
-	      tmp = client->next;
-	      if ((client->sd_tcp != -1) && (FD_ISSET(client->sd_tcp, &rfds)))
-	      {
-		if (queue_read_tcp(conf, client))
-		  {
-		    if (client->sd_tcp != -1)
-		      close(client->sd_tcp);
-		    delete_client(conf, client);
-		  }
-	      }
+	        read(0, buffer, MINI_BUFF); 
+	        queue_dump(conf->client);
+	        continue;
 	    }
-	}
-      delete_zombie(conf);
+#endif
+        if (FD_ISSET(conf->sd_udp, &rfds))
+        {
+	        get_incoming_request(conf);
+        }
+        else
+	    {
+            for (client = conf->client;  client; client = tmp)
+            {
+                tmp = client->next;
+                if ((client->sd_tcp != -1) && (FD_ISSET(client->sd_tcp, &rfds)))
+                {
+                    if (queue_read_tcp(conf, client))
+                    {
+                      if (client->sd != -1)
+                      {
+                          close(client->sd);
+                          client->sd = -1;
+                      }
+                      if (client->sd_tcp != -1)
+                      {
+                          close(client->sd_tcp);
+                          client->sd_tcp = -1;
+                      }
+                      delete_client(conf, client);
+                    }
+                }
+                if ((client->sd != -1) && (FD_ISSET(client->sd, &rfds)))
+                {
+                    client->sd_tcp = accept(client->sd, 0, 0);
+                    if (client->sd_tcp < 0)
+                    {
+                        MYERROR("accept");
+                        // exit
+                    }
+                    close(client->sd);
+                    client->sd = -1;
+                }
+            }
+	    }
+        delete_zombie(conf);
     }
 }
 

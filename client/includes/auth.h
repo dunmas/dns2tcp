@@ -21,9 +21,10 @@
 #ifndef __AUTH_H__
 #define __AUTH_H__
 
-int		list_resources(t_conf *conf);
 uint16_t	connect_resource(t_conf *conf, uint16_t);
+uint16_t	check_resource_connected(t_conf *conf, uint16_t);
 uint16_t	create_session(t_conf *conf);
+uint16_t	disconnect_client(t_conf *conf, uint16_t session_id);
 
 #endif
 

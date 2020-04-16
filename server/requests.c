@@ -27,8 +27,8 @@
 #include "server.h"
 #include "dns.h"
 #include "dns_decode.h"
-#include "list.h"
-#include "base64.h"
+#include "list.h" 
+#include "base32.h"
 #include "myerror.h"
 #include "queue.h"
 #include "mystrnlen.h"
@@ -42,8 +42,9 @@
 
 const t_command dns_commands[]= {
 	{AUTH, sizeof(AUTH)-1, 0, &login_user},
-	{RESOURCE, sizeof(RESOURCE)-1, 1, &send_resources_reply},
 	{CONNECT, sizeof(CONNECT)-1, 1, &bind_user},
+	{CONNECTED, sizeof(CONNECTED)-1, 1, &check_connected},
+	{DISCONNECTED, sizeof(DISCONNECTED)-1, 1, &disconnected},
 	{0,0,0,0}
 };
 
@@ -74,61 +75,6 @@ static uint16_t		get_type_request(t_request *req)
   return (0);
 }
 
-/**
- * @brief send list of available ressource
- * @param[in] conf configuration
- * @param[in] req request
- * @param[in] packet packet structure
- * @param[in] client client
- * @note need to be authenticated
- **/
-
-int			send_resources_reply(t_conf *conf, t_request *req, t_packet *packet,  t_simple_list *client)
-{
-  struct dns_hdr	*hdr;
-  t_list		*list;
-  void			*where = 0;
-  char			buffer2[MAX_DNS_LEN + 1];  
-  char			buffer[MAX_DNS_LEN + 1];
-  int			len, ressource_len;
-  uint16_t		answer_len;
-
-  hdr = (struct dns_hdr *)req->data;
-  hdr->ra = 1;
-  hdr->aa = 1;
-  hdr->qr = 1;
-  
-  DPRINTF(3, "Sending resource\n");
-  if (!(where = jump_end_query(req->data, GET_16(&hdr->qdcount), req->len)))
-    return (-1);
-  packet = (t_packet *)&buffer2;
-  packet->type = OK;
-  for (list = conf->resources; list; list = list->next)
-    {
-      answer_len = where ? (uint16_t)((void *)where - (void *)hdr) : req->len;
-      len = strchr(list->data, ':') - list->data;
-      if ((BASE64_SIZE(len) + (where - (void *)req->data)) < MAX_DNS_LEN )
-	{
-	  if ((!(ressource_len = req->reply_functions->rr_available_len(hdr, client, answer_len)))
-	      || (strlen(list->data) > ressource_len))
-	    {
-	      LOG("Not enought space to send resources, message will be truncated\n");
-	      break;
-	    }
-	  strcpy(&buffer2[PACKET_LEN], list->data); 
-	  base64_encode(buffer2, buffer, len+PACKET_LEN);
-	  where = req->reply_functions->rr_add_reply(conf, req, hdr, where, buffer);
-	}
-    }
-  answer_len = (uint16_t)((void *)where - (void *)hdr);
-  if ((sendto(conf->sd_udp, req->data, answer_len, 
-              0, (struct sockaddr *)&req->sa, sizeof(struct sockaddr))) != answer_len)
-    {
-      MYERROR("sendto error");
-      return (-1);
-    }
-  return (0);
-}
 
 /**
  * @brief decode a request
@@ -165,7 +111,7 @@ int			get_request(t_conf *conf, t_request *req, t_data *output)
       return (-1);
     }
   DPRINTF(3, "Receive query : %s dns_id = 0x%x for domain %s\n", buffer, ntohs(hdr->id), req->domain);
-  return ((output->len = base64_decode((unsigned char *)output->buffer, buffer)));
+  return ((output->len = base32_decode((unsigned char *)output->buffer, buffer)));
 }
 
 /* 
@@ -198,7 +144,7 @@ int			send_reply(t_conf *conf, t_request *req, t_data *data)
 
   packet = (t_packet *)data->buffer;
   packet_id = ntohs(packet->seq);
-  base64_encode(data->buffer, buffer, data->len);
+  base32_encode(data->buffer, buffer, data->len);
   where = req->reply_functions->rr_add_reply(conf, req, hdr, where, buffer);
   /* update request len */
   req->len = where - (void *)req->data;

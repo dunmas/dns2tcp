@@ -21,7 +21,7 @@
 #ifndef __DNS_H__
 #define __DNS_H__
 
-#include "config.h"
+//#include "config.h"
 
 #ifndef _WIN32
 #include <unistd.h>
@@ -29,7 +29,7 @@
 #else
 #include "mywin32.h"
 #endif
-#include "base64.h"
+#include "base32.h"
 
 #define MAX_DNS_LEN			512
 #define MAX_EDNS_LEN			4096
@@ -46,14 +46,14 @@
 #define MAX_ENCODE_DATA(len, dns_size)	\
 	( \
 		 (((len)+RR_HDR_SIZE) > (dns_size - AUTHORITATIVE_SIZE)) ? 0 :		\
-			DECODED_LEN(DECODED_BASE64_SIZE(\
+			DECODED_LEN(DECODED_BASE32_SIZE(\
 			( (dns_size - AUTHORITATIVE_SIZE) - (len) - (RR_HDR_SIZE)) ) \
 				    ))
 
 #define MAX_RAW_DATA(len, dns_size)	\
 	( \
 		 (((len)+RR_HDR_SIZE) > (dns_size - AUTHORITATIVE_SIZE)) ? 0 :	\
-			DECODED_BASE64_SIZE(\
+			DECODED_BASE32_SIZE(\
 		    ( (dns_size - AUTHORITATIVE_SIZE) - (len) - (RR_HDR_SIZE) ) ) \
 	  )
 
@@ -79,7 +79,7 @@
 				((MAX_RAW_DATA((len) + 2, (dns_size + 1)))) : \
 				((MAX_RAW_DATA((len) + (query_len), (dns_size))))
 */
-#define	MAX_QNAME_DATA(domain)		(DECODED_BASE64_SIZE(MAX_HOST_NAME_DECODED - strlen(domain) - 1))
+#define	MAX_QNAME_DATA(domain)		(DECODED_BASE32_SIZE(MAX_HOST_NAME_DECODED - strlen(domain) - 1))
 
 /* GCC alignement padding workaround */
 
@@ -123,11 +123,12 @@
 			  (((unsigned char *)(src))[3] )		\
 		     )
 
-/* FIXME hardcoded '=' is bad ! (check base64_padding ...) */
+/* FIXME hardcoded '=' is bad ! (check base32_padding ...) */
 #define RESOURCE	"=resource."
 #define AUTH		"=auth."
 #define CONNECT		"=connect."
-
+#define CONNECTED   "=connected."
+#define DISCONNECTED	"=disconnected."
 
 
 struct				dns_hdr {

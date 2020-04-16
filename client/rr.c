@@ -20,6 +20,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "dns.h"
 #include "client.h"
@@ -97,15 +98,15 @@ int                     rr_decode_next_reply_encode(t_request *req, char *output
   if (!(reply = jump_next_reply(req, output, max_len, idx, 1)))
     return (0);
   
-  if (ENCODED_LEN(DECODED_BASE64_SIZE(strlen(JUMP_RR_HDR(reply)))) > max_len)
+  if (ENCODED_LEN(DECODED_BASE32_SIZE(strlen(JUMP_RR_HDR(reply)))) > max_len)
     {
       DPRINTF(1,"Packet seems too big, this part is drop");
       return (0);
     }
   dns_simple_decode_strip_dot(JUMP_RR_HDR(reply), buffer, GET_16(&(reply->rdlength)));
-  DPRINTF(3, "%s base64 data was = %s (reply len = %d)\n", __FUNCTION__, &buffer[1],  GET_16(&(reply->rdlength)));
+  DPRINTF(3, "%s base32 data was = %s (reply len = %d)\n", __FUNCTION__, &buffer[1],  GET_16(&(reply->rdlength)));
   /*  jump idx  ->  &buffer[1] */
-  return (base64_decode((unsigned char *)output, &buffer[1]));
+  return (base32_decode((unsigned char *)output, &buffer[1]));
 }
 
 int                     rr_decode_next_reply_raw(t_request *req, char *output, int max_len, int idx)
@@ -117,9 +118,9 @@ int                     rr_decode_next_reply_raw(t_request *req, char *output, i
     return (0);
   memset(buffer, 0, sizeof(buffer));
   strncpy(buffer, JUMP_RR_HDR(reply), GET_16(&(reply->rdlength)));
-  DPRINTF(3, "%s base64 data was = %s (reply len = %d)\n", __FUNCTION__, buffer,  GET_16(&(reply->rdlength)));
-  if (DECODED_BASE64_SIZE(strlen(buffer)) > max_len)
+  DPRINTF(3, "%s base32 data was = %s (reply len = %d)\n", __FUNCTION__, buffer,  GET_16(&(reply->rdlength)));
+  if (DECODED_BASE32_SIZE(strlen(buffer)) > max_len)
     return (0);
   /*  jump idx  ->  &buffer[1] */
-  return (base64_decode((unsigned char *)output, &buffer[1]));
+  return (base32_decode((unsigned char *)output, &buffer[1]));
  }

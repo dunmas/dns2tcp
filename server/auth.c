@@ -29,7 +29,7 @@
 #include "dns.h"
 #include "list.h"
 #include "requests.h"
-#include "base64.h"
+#include "base32.h"
 #include "myrand.h"
 #include "socket.h"
 #include "queue.h"
@@ -48,31 +48,50 @@
  * @retval -1 on error
  **/
 
-static int		connect_resource(t_conf *conf, t_request *req, t_packet *packet, int *sd)
+static int		connect_resource(t_conf *conf, t_request *req, t_packet *packet, t_simple_list *client, int *sd)
 {
-  t_list		*list_resource;
-  char			*resource;
-  int			len;
+    t_list		*list_resource;
+    char		*resource, *tmp;
+    int			len;
   
-  resource = ((char *)packet) + PACKET_LEN;
-  if (!(len = strlen(resource)))
-    return (-1);
-  DPRINTF(1, "Ask for resource \'%s\'\n", resource);
-  for (list_resource = conf->resources; list_resource; list_resource = list_resource->next)
+    resource = ((char *)packet) + PACKET_LEN;
+    if (!(len = strlen(resource)))
+        return (-1);
+    DPRINTF(1, "Client request for tunneling \'%s\'\n", resource);
+  
+    tmp = strchr(resource, ':');
+	if (tmp == NULL)
+	{   
+        // Client runs in -R mode
+        client->is_local_port_forwarding = false;
+        client->port = atoi(resource);
+	}
+    else
     {
-      if ((!strncmp(list_resource->data, resource, len)) 
-	  && (list_resource->data[len] == ':'))
-      {
-	if (!(connect_socket(strchr(list_resource->data, ':') + 1, list_resource->info.port, sd)))
-	  return (0);
-	packet->type = ERR;
-	send_ascii_reply(conf, req, packet, ERR_CONN_REFUSED);
-	return (-1);
-      }
+        // Client runs in -L mode
+        tmp[0] = '\0';
+        tmp++;
+        client->is_local_port_forwarding = true;
+        client->port = atoi(tmp);
+        client->address = inet_addr(resource);
     }
-  packet->type = ERR;
-  send_ascii_reply(conf, req, packet, ERR_RESOURCE);
-  return (-1);
+    
+    if (client->is_local_port_forwarding)
+    {
+        DPRINTF(1, "Connecting to host %s port %d\n", resource, client->port);
+        if (! connect_socket(client->address, client->port, sd))
+            return (0);
+    }
+    else
+    {
+        DPRINTF(1, "Binding to port %d\n", client->port);
+        if (! bind_socket_tcp(client->port, sd))
+            return (0);
+    }
+        
+    packet->type = ERR;
+    send_ascii_reply(conf, req, packet, ERR_CONN_REFUSED);
+    return (-1);
 }
 
 
@@ -88,38 +107,75 @@ static int		connect_resource(t_conf *conf, t_request *req, t_packet *packet, int
 
 int			bind_user(t_conf *conf, t_request *req, t_packet *packet, t_simple_list *client)
 {
-  int			sd;
-  char			*resource;
-  char			*compress;
+    int			sd;
+    char			*resource;
+    char			*compress;
 
-  if (connect_resource(conf, req, packet, &sd))
-    return (-1);
-  resource = ((char *)packet) + PACKET_LEN;
-  client_update_timer(client);
-  if (!(compress = jump_end_query(req, 
+    if (connect_resource(conf, req, packet, client, &sd))
+        return (-1);
+    resource = ((char *)packet) + PACKET_LEN;
+    client_update_timer(client);
+    if (!(compress = jump_end_query(req, 
 				   GET_16(&(((struct dns_hdr *)req->data)->qdcount)), req->len)))
     {
-      fprintf(stderr, "invalid reply\n");
-      return (-1);
+        fprintf(stderr, "invalid reply\n");
+        return (-1);
     }
 
-  client->sd_tcp = sd;
-  // FIXME bug ipv6 support
-  LOG("Bind client id: 0x%x address = %u.%u.%u.%u to resource %s", client->session_id,
-#ifndef WORDS_BIGENDIAN
-      (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff)
-#else
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff)
-#endif
-      , resource);
-  packet->type = OK;
-  return (send_ascii_reply(conf, req, packet, ""));
+    if (client->is_local_port_forwarding)
+    {
+        client->sd = -1;
+        client->sd_tcp = sd;
+    }
+    else
+    {
+        client->sd = sd;
+        client->sd_tcp = -1;
+    }
+
+    packet->type = OK;
+    return (send_ascii_reply(conf, req, packet, ""));
+}
+
+
+/**
+ * @brief checks if new connection was established to client's socket
+ * @param[in] conf configuration
+ * @param[in] req DNS request
+ * @param[in] packet packet request
+ * @param[in] client client to bind
+ * @retval 0 on success
+ * @retval -1 on error
+ **/
+
+int			check_connected(t_conf *conf, t_request *req, t_packet *packet, t_simple_list *client)
+{
+    client_update_timer(client);
+    if (client->sd_tcp == -1)
+        packet->type = NOP;
+    else
+        packet->type = OK;
+    
+    LOG("Check connected client id: 0x%x res is %d", client->session_id, packet->type);
+    return (send_ascii_reply(conf, req, packet, ""));
+}
+
+int			disconnected(t_conf *conf, t_request *req, t_packet *packet, t_simple_list *client)
+{
+    LOG("Got that remote connection closed: 0x%x", client->session_id);
+	if (client->sd != -1)
+    {
+	    close(client->sd);
+        client->sd = -1;
+    }
+	if (client->sd_tcp != -1)
+    {
+	    close(client->sd_tcp);
+        client->sd_tcp = -1;
+    }
+	delete_client(conf, client);
+        
+    return 0;
 }
 
 
@@ -159,6 +215,7 @@ int		login_user(t_conf *conf, t_request *req, t_packet *packet)
       client_update_timer(client);
       client->control.authenticated = 1;
       client->sd_tcp = -1;
+      client->sd = -1;
       packet->type = OK;
       return (send_ascii_reply(conf, req, packet, ""));
     }

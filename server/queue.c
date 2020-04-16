@@ -26,7 +26,7 @@
 #include <string.h>
 
 #include "mycrypto.h"
-#include "base64.h"
+#include "base32.h"
 #include "server.h"
 #include "dns.h"
 #include "dns_decode.h"
@@ -133,6 +133,7 @@ static int		queue_copy_data(t_simple_list *client, t_list *queue, t_packet *pack
       memcpy(queue->peer.data, data, len - PACKET_LEN);
       queue->peer.len = len - PACKET_LEN;
     }
+  DPRINTF(3, "[queue_copy_data] packet->type is %d\n", packet->type);
   if (packet->type == NOP)
     queue->peer.len = 0;
   if (packet->type == DESAUTH)
@@ -227,22 +228,22 @@ static void		queue_reply(t_conf *conf, t_simple_list *client,
 
 static int		queue_flush_incoming_data(t_simple_list *client)
 {
-  t_list		*queue;
-
-  queue = client->queue;
-  while ((queue) && (queue->status != FREE))
+    t_list		*queue;
+    
+    queue = client->queue;
+    while ((queue) && (queue->status != FREE))
     {
-      if (queue->peer.len)
-	{
-	  if (write(client->sd_tcp, queue->peer.data, queue->peer.len) != queue->peer.len)
-	    return (-1);
-	  DPRINTF(2, "Flush Write %d bytes, crc = 0x%x \n", queue->peer.len, 
-		  crc16((const char*) queue->peer.data, queue->peer.len));
-	  queue->peer.len = 0;
-	}
-      queue = queue->next;
+        if (queue->peer.len)
+	    {
+	        if (write(client->sd_tcp, queue->peer.data, queue->peer.len) != queue->peer.len)
+	            return (-1);
+	        DPRINTF(2, "Flush Write %d bytes, crc = 0x%x \n", queue->peer.len, 
+	  	      crc16((const char*) queue->peer.data, queue->peer.len));
+	        queue->peer.len = 0;
+	    }
+        queue = queue->next;
     }
-  return (0);
+    return (0);
 }
 
 /**
@@ -384,6 +385,7 @@ static int		queue_deal_incoming_data(t_conf *conf, t_simple_list *client, t_list
     return (-1);
   if (queue)
     {
+      DPRINTF(3, "[queue_deal_incoming_data] queue->status is %d\n", queue->status);
       hdr = (void *)queue->data;
       switch (queue->status) 
 	{
@@ -435,36 +437,36 @@ static int		queue_deal_incoming_data(t_conf *conf, t_simple_list *client, t_list
 
 int			queue_read_tcp(t_conf *conf, t_simple_list *client)
 {
-  char			buffer[ MAX_EDNS_LEN ];
-  t_list		*queue;
-  struct dns_hdr	*hdr;
-  int			len;
-  
-  for (queue = client->queue; queue; queue = queue->next)
+    char			buffer[ MAX_EDNS_LEN ];
+    t_list		*queue;
+    struct dns_hdr	*hdr;
+    int			len;
+    
+    for (queue = client->queue; queue; queue = queue->next)
     {
-      if (queue->status == FREE)
-	break;
-      if (queue->status == USED)
-	{
-	  hdr = (struct dns_hdr *) queue->data;
-	  if ((len = queue->peer.reply_functions->rr_available_len(hdr, client, queue->len)) > 0)
+        if (queue->status == FREE)
+	        break;
+        if (queue->status == USED)
 	    {
-	      if ((len = read(client->sd_tcp, buffer, len)) < 1)
-		{
-		  /* nothing to read : connection closed */
-		  queue_reply(conf, client, queue, 0, -1);
-		  return (-1);
-		}
-	      DPRINTF(3, "Read tcp %d bytes, crc = 0x%x\n", len, crc16((const char *)buffer, len));
-	      
-	      queue_reply(conf, client, queue, buffer, len);
-	      return (0);
+	        hdr = (struct dns_hdr *) queue->data;
+	        if ((len = queue->peer.reply_functions->rr_available_len(hdr, client, queue->len)) > 0)
+	        {
+	            if ((len = read(client->sd_tcp, buffer, len)) < 1)
+	  	        {
+	  	            /* nothing to read : connection closed */
+	  	            queue_reply(conf, client, queue, 0, -1);
+	  	            return (-1);
+	  	        }
+	            DPRINTF(3, "Read tcp %d bytes, crc = 0x%x\n", len, crc16((const char *)buffer, len));
+	            
+	            queue_reply(conf, client, queue, buffer, len);
+	            return (0);
+	        }
+	        DPRINTF(1, "Query too long for a reply\n");
 	    }
-	  DPRINTF(1, "Query too long for a reply\n");
-	}
     }
-  client->control.queue_full = 1;
-  return (0);
+    client->control.queue_full = 1;
+    return (0);
 }
 
 /**
@@ -626,54 +628,63 @@ t_simple_list	*find_client_by_session_id(t_conf *conf, uint16_t session_id)
 
 int		queue_put_data(t_conf *conf, t_request *req, t_data *decoded_data)
 {
-  t_packet	*packet;
-  t_simple_list	*client;
-  t_list	*queue;
-  int		diff = 0;
-  uint16_t      seq_tmp;
-
-  if (PACKET_LEN > decoded_data->len)
-    return (-1);
-  packet = (t_packet *)decoded_data->buffer;
-  /* convert ntohs */
-  seq_tmp = GET_16(&(packet->seq)) ; packet->seq = seq_tmp;
-  seq_tmp = GET_16(&(packet->ack_seq)) ; packet->ack_seq = seq_tmp;
-
-  DPRINTF(2, "Packet [%d] decoded, data_len %d\n", packet->seq, decoded_data->len - (int)PACKET_LEN);
-  if ((client = find_client_by_session_id(conf, packet->session_id)))
+    t_packet	*packet;
+    t_simple_list	*client;
+    t_list	*queue;
+    int		diff = 0;
+    uint16_t      seq_tmp;
+    
+    if (PACKET_LEN > decoded_data->len)
+        return (-1);
+    packet = (t_packet *)decoded_data->buffer;
+    /* convert ntohs */
+    seq_tmp = GET_16(&(packet->seq)) ; packet->seq = seq_tmp;
+    seq_tmp = GET_16(&(packet->ack_seq)) ; packet->ack_seq = seq_tmp;
+    
+    DPRINTF(2, "Packet [%d] decoded, data_len %d\n", packet->seq, decoded_data->len - (int)PACKET_LEN);
+    if ((client = find_client_by_session_id(conf, packet->session_id)))
     { 
-      if (client->sd_tcp < 0)
-	return (0); /* slient drop */
-      client_update_timer(client);
-      queue = client->queue;
-      if (client->num_seq > packet->seq) /*  seq must not be 0 */
-	diff = ((MAX_SEQ - client->num_seq) + packet->seq ); 
-      else
-	diff = packet->seq - client->num_seq ;
-      DPRINTF(2, "diff = %d\n", diff);
-      if ((diff > QUEUE_SIZE) || (!packet->seq))
-	{
-	  DPRINTF(3, "seq %d not good diff %d\n", packet->seq, diff);
-	  return (-1); /* not in seq */
-	}
-      if ((queue = get_cell_in_queue(queue, diff)))
-	{
-	  queue_copy_query(req, queue, packet->seq);
-	  if (queue_deal_incoming_data(conf, client, queue, packet, decoded_data->len))
+        if (client->sd_tcp < 0)
+	        return (0); /* slient drop */
+        client_update_timer(client);
+        queue = client->queue;
+        if (client->num_seq > packet->seq) /*  seq must not be 0 */
+	        diff = ((MAX_SEQ - client->num_seq) + packet->seq ); 
+        else
+	        diff = packet->seq - client->num_seq ;
+        DPRINTF(2, "diff = %d\n", diff);
+        if ((diff > QUEUE_SIZE) || (!packet->seq))
 	    {
-	      close(client->sd_tcp);
-	      return (delete_client(conf, client));
+	        DPRINTF(3, "seq %d not good diff %d\n", packet->seq, diff);
+	        return (-1); /* not in seq */
 	    }
-	}
-      else 
-	/* Cell not found (reply already received or cell lost ? ) */
-	return (send_error(conf, req, RCODE_NAME_ERR));
+        if ((queue = get_cell_in_queue(queue, diff)))
+	    {
+	        queue_copy_query(req, queue, packet->seq);
+	        if (queue_deal_incoming_data(conf, client, queue, packet, decoded_data->len))
+	        {
+                if (client->sd != -1)
+                {
+                    close(client->sd);
+                    client->sd = -1;
+                }
+                if (client->sd_tcp != -1)
+                {
+                    close(client->sd_tcp);
+                    client->sd_tcp = -1;
+                }
+                return (delete_client(conf, client));
+	        }
+	    }
+        else 
+	        /* Cell not found (reply already received or cell lost ? ) */
+	        return (send_error(conf, req, RCODE_NAME_ERR));
     }
-  
-  if (!client)
+    
+    if (!client)
     {
-      DPRINTF(3, "Not a client 0x%x\n", packet->session_id);
-      return (send_error(conf, req, RCODE_REFUSED));
+        DPRINTF(3, "Not a client 0x%x\n", packet->session_id);
+        return (send_error(conf, req, RCODE_REFUSED));
     }
-  return (0); // Silent DROP 
+    return (0); // Silent DROP 
 }

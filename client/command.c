@@ -29,6 +29,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include "myerror.h"
 #include "list.h"

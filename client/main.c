@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <sys/types.h>
+#include <stdbool.h>
 
 #ifndef _WIN32
 #include <sys/time.h>
@@ -33,6 +34,7 @@
 #include "options.h"
 #include "socket.h"
 #include "auth.h"
+#include "debug.h"
 #include "myerror.h"
 #include "dns.h"
 
@@ -50,6 +52,7 @@ int			main(int argc, char **argv)
       ((conf.sd_udp = create_socket(&conf)) == -1))
     return (-1);
   srand(getpid() ^ (unsigned int) time(0));
+
 #ifdef _WIN32
   if (!(conf.event_udp = WSACreateEvent()))
     {
@@ -58,9 +61,9 @@ int			main(int argc, char **argv)
     }
   WSAEventSelect(conf.sd_udp, conf.event_udp, FD_READ);
 #endif
-  if (!conf.resource)
-    return (list_resources(&conf));
-  if ((!conf.local_port) || (!bind_socket(&conf)))
+
+  DPRINTF(1, "%d %d:%s:%d\n", conf.is_local_port_forwarding, conf.local_port, conf.remote_host, conf.remote_port);
+  if (conf.remote_port  && conf.remote_host)
     do_client(&conf);
   return (0);
 }

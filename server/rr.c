@@ -129,7 +129,7 @@ void                    *rr_add_reply_cname(t_conf *conf, t_request *req, struct
  * @param[in] req request received
  * @param[in] hdr DNS header
  * @param[in] where memory address
- * @param[in] encoded_data data encoded in base64
+ * @param[in] encoded_data data encoded in base32
  **/
 
 void                    *rr_add_reply_encode(t_conf *conf, t_request *req, struct dns_hdr *hdr, void *where, char *encoded_data)
@@ -151,7 +151,7 @@ void                    *rr_add_reply_encode(t_conf *conf, t_request *req, struc
  * @param[in] req request received
  * @param[in] hdr DNS header
  * @param[in] where memory address
- * @param[in] encoded_data data encoded in base64
+ * @param[in] encoded_data data encoded in base32
  **/
 
 void                    *rr_add_reply_raw(t_conf *conf,  t_request *req, struct dns_hdr *hdr, 

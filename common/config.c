@@ -21,11 +21,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <config.h>
+//#include <config.h>
 
-#ifdef HAVE_STDINT_H
+//#ifdef HAVE_STDINT_H
 #include <stdint.h>
-#endif
+//#endif
 
 #ifdef _WIN32
 #include "mywin32.h"

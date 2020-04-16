@@ -21,7 +21,7 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
-#include "config.h"
+//#include "config.h"
 
 #ifndef _WIN32
 #include <netdb.h>

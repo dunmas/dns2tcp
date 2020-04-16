@@ -19,6 +19,7 @@
 */
 
 #include <stdio.h>
+#include <stdbool.h>
 
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -36,6 +37,8 @@
 #include "queue.h"
 #include "socket.h"
 
+
+
 #ifdef _WIN32
 int		add_event(WSAEVENT event, HANDLE *rfds, int max_fd)
 {
@@ -50,89 +53,81 @@ int		add_socket(socket_t socket, fd_set *rfds, socket_t max_fd)
 }
 #endif
 
+
 #ifdef _WIN32
 int		win_prepare_select(t_conf *conf, WSAEVENT *rfds, struct timeval *tv)
 {
-  int		max_fd = 0;
-  t_simple_list	*client;
+	int		max_fd = 0;
+	t_simple_list	*client;
 
-  max_fd = add_event(conf->event_udp, rfds, max_fd);
+	max_fd = add_event(conf->event_udp, rfds, max_fd);
   
-  for (client = conf->client; client; client = client->next)
+	for (client = conf->client; client; client = client->next)
     {
-      if (socket_is_valid(client->fd_ro))
-	{
-	  queue_put_nop(conf, client);
-	  if ((client->control.data_pending < MAX_DATA_SIZE)
-	      && ((client->control.data_pending + client->control.nop_pending < WINDOW_SIZE)))
-	    {
-	      if (client->control.event && socket_is_valid(client->fd_ro)) 
-		max_fd = add_event(client->control.event, rfds, max_fd);
-	      else 
+		if (socket_is_valid(client->fd_ro))
 		{
-		  if (client->pid != (process_t)-1) {
-		    // watch for pipe I/O completion
-		    max_fd = add_event(client->control.aio.hEvent, rfds, max_fd);
-		  }
+			queue_put_nop(conf, client);
+			if ((client->control.data_pending < MAX_DATA_SIZE)
+				&& ((client->control.data_pending + client->control.nop_pending < WINDOW_SIZE)))
+			{
+				if (client->control.event && socket_is_valid(client->fd_ro)) 
+					max_fd = add_event(client->control.event, rfds, max_fd);
+			} 
+			else 
+			{
+				if (client->control.nop_pending == 0xffff) 
+				{
+					DPRINTF(1, "WTF !\n");
+					exit(0);
+				}
+				SetEvent(conf->event_udp);
+			}
 		}
-	    } 
-	  else 
-	    {
-	      if (client->control.nop_pending == 0xffff) 
-		{
-		  DPRINTF(1, "WTF !\n");
-		  exit(0);
-		}
-	      SetEvent(conf->event_udp);
-	    }
-	  if (client->pid != (process_t)-1) {
-	    // watch for process event (dead)
-	    max_fd = add_event(client->pid, rfds, max_fd);
-	  }
-	}
     }
-  /* select only if sd_tcp is alive */
-  if (socket_is_valid(conf->sd_tcp))
-    max_fd = add_event(conf->event_tcp, rfds, max_fd);
-  tv->tv_sec = SOCKET_TIMEOUT;
-  tv->tv_usec = 0;
-  return (max_fd);
+
+	/* when -L option conf->sd is a bind socket */
+	if (conf->is_local_port_forwarding && socket_is_valid(conf->sd))
+		max_fd = add_event(conf->event_tcpsd, rfds, max_fd);
+
+	tv->tv_sec = SOCKET_TIMEOUT;
+	tv->tv_usec = 0;
+	return (max_fd);
 }
 
 #else
-
+    
 int		unix_prepare_select(t_conf *conf, fd_set *rfds, struct timeval *tv)
 {
-  int		max_fd = 0;
-  t_simple_list	*client;
+    int		max_fd = 0;
+    t_simple_list	*client;
   
-  FD_ZERO(rfds);
-  for (client = conf->client; client; client = client->next)
+    FD_ZERO(rfds);
+    for (client = conf->client; client; client = client->next)
     {
-      if (socket_is_valid(client->fd_ro))
-	{
-	  queue_put_nop(conf, client);
-	  if (!(client->control.data_pending >= MAX_DATA_SIZE)
-	      && (!(client->control.data_pending + client->control.nop_pending >= WINDOW_SIZE)))
-	    {
-	      if (socket_is_valid(client->fd_ro))
-		max_fd = add_socket(client->fd_ro, rfds, max_fd);
-	    }
-	}
+        if (socket_is_valid(client->fd_ro))
+        {
+            queue_put_nop(conf, client);
+            if (!(client->control.data_pending >= MAX_DATA_SIZE)
+                && (!(client->control.data_pending + client->control.nop_pending >= WINDOW_SIZE)))
+            {
+                if (socket_is_valid(client->fd_ro))
+                    max_fd = add_socket(client->fd_ro, rfds, max_fd);
+            }
+        }
     }
-  max_fd = add_socket(conf->sd_udp, rfds, max_fd);
-  // fuck Windows, not queue debug
-  if ((!conf->use_stdin) && (debug > 1))
-    max_fd = add_socket(0, rfds, max_fd);
-  
-  /* select only if sd_tcp is alive */
-  if (socket_is_valid(conf->sd_tcp))
-    max_fd = add_socket(conf->sd_tcp, rfds, max_fd);
-  tv->tv_sec = SOCKET_TIMEOUT;
-  tv->tv_usec = 0;
-  return (max_fd);
+    max_fd = add_socket(conf->sd_udp, rfds, max_fd);
+
+	/* when -L option conf->sd is a bind socket */
+	if (conf->is_local_port_forwarding && socket_is_valid(conf->sd))
+		max_fd = add_socket(conf->sd, rfds, max_fd);
+    tv->tv_sec = SOCKET_TIMEOUT;
+    tv->tv_usec = 0;
+    return (max_fd);
 }
 #endif
+
+
+
 
 /**
  * @brief prepare the fd_set for select or HANDLE for Windows

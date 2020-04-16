@@ -32,6 +32,7 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdbool.h>
 
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -90,6 +91,11 @@ int		delete_client(t_conf *conf, t_simple_list *client)
       delete_queue(client->saved_queue);
       list_destroy_simple_cell(conf->client);
       conf->client = tmp;
+	  if (conf->sd_tcp != -1)
+	  {
+		  close(conf->sd_tcp);
+		  conf->sd_tcp = -1;
+	  }
       /* Exit no listenning port and no valid socket */
       return ( !conf->local_port && !socket_is_valid(conf->sd_tcp));
     }
@@ -128,67 +134,86 @@ static int	delete_all_client(t_conf *conf)
 int		add_client(t_conf *conf, socket_t fd_ro,
 			   socket_t fd_wo, process_t pid)
 {
-  uint16_t	session_id;
-  t_simple_list	*client;
+	uint16_t	session_id;
+	t_simple_list	*client;
 #ifdef _WIN32
-  HANDLE	evt;
+	HANDLE	evt;
 #endif
   
-  if (!((session_id = create_session(conf))))
-    return (-1);
-  if (connect_resource(conf, session_id))
-    return (-1);
-  DPRINTF(1, "Adding client auth OK: 0x%hx\n", session_id);
-  if (!(conf->client))
+	if (!((session_id = create_session(conf))))
+		return (-1);
+	if (connect_resource(conf, session_id))
+		return (-1);
+	DPRINTF(1, "Adding client auth OK: 0x%hx\n", session_id);
+
+	// check_resource_connected 0 - CONNECTED
+	// check_resource_connected 2 - NOT CONNECTED YET
+	// check_resource_connected 1 - ERROR
+
+	if (!conf->is_local_port_forwarding)
+	{
+		int res = check_resource_connected(conf, session_id);
+		while (res == 2)
+		{
+			DPRINTF(1, "Resource is not connected yet\n");
+			sleep(1);
+			res = check_resource_connected(conf, session_id);
+			DPRINTF(1, "check_resource_connected returned %i\n", res);
+		}
+		if (res == 1)
+			return (-1);
+	}
+
+	if (!(conf->client))
     {
-      if (!(conf->client = list_create_simple_cell()))
-	return (-1);
-      client = conf->client;
+		if (!(conf->client = list_create_simple_cell()))
+			return (-1);
+		client = conf->client;
     }
-  else
+	else
     {
-      client = conf->client;
-      while (client->next)
-	client = client->next;
-      if (!(client->next = list_create_simple_cell()))
-	return (-1);
-      client = client->next;
+		client = conf->client;
+		while (client->next)
+			client = client->next;
+		if (!(client->next = list_create_simple_cell()))
+			return (-1);
+		client = client->next;
     }
 #ifdef _WIN32
-  if (pid == (process_t) -1)
+	if (pid == (process_t) -1)
     {
-      if ((!((client->control.event = WSACreateEvent())))
-	  || (WSAEventSelect(fd_ro, client->control.event, FD_READ |FD_ACCEPT|FD_CLOSE) == SOCKET_ERROR))
-	{
-	  MYERROR("WSAEvent error\n");
-	  return (-1);
+		if ((!((client->control.event = WSACreateEvent())))
+			|| (WSAEventSelect(fd_ro, client->control.event, FD_READ|FD_ACCEPT|FD_CLOSE) == SOCKET_ERROR))
+		{
+			MYERROR("WSAEvent error\n");
+			return (-1);
+		}
+		DPRINTF(1, "Client event = 0x%p\n", client->control.event);
+	} else {
+		evt = CreateEvent(NULL, FALSE, TRUE, NULL);	
+		if (!evt) {
+			MYERROR("CreateEvent error\n");
+			return (-1);
+		}
+		DPRINTF(1, "Pipe event = 0x%x\n", (unsigned int ) evt);
+		ZeroMemory(&client->control.aio, sizeof(OVERLAPPED));
+		client->control.aio.hEvent = evt;
+		client->control.event = NULL;
+		client->control.io_pending = 0;
 	}
-      DPRINTF(1, "Client event = 0x%p\n", client->control.event);
-    } else {
-    evt = CreateEvent(NULL, FALSE, TRUE, NULL);	
-    if (!evt) {
-      MYERROR("CreateEvent error\n");
-      return (-1);
-    }
-    DPRINTF(1, "Pipe event = 0x%x\n", (unsigned int ) evt);
-    ZeroMemory(&client->control.aio, sizeof(OVERLAPPED));
-    client->control.aio.hEvent = evt;
-    client->control.event = NULL;
-    client->control.io_pending = 0;
-  }
 #endif
-  client->session_id = session_id;
-  client->fd_ro = fd_ro;
-  client->fd_wo = fd_wo;
-  client->pid = pid;
-  client->control.data_pending = 0;
-  client->control.nop_pending = 0;
-  client->num_seq = 0;
-  client->saved_queue = 0;
-  if (! (client->queue = init_queue()))
-    return (-1);
-  client->saved_queue = client->queue;
-  return (0);
+	client->session_id = session_id;
+	client->fd_ro = fd_ro;
+	client->fd_wo = fd_wo;
+	client->pid = pid;
+	client->control.data_pending = 0;
+	client->control.nop_pending = 0;
+	client->num_seq = 0;
+	client->saved_queue = 0;
+	if (! (client->queue = init_queue()))
+		return (-1);
+	client->saved_queue = client->queue;
+	return (0);
 }
 
 
@@ -197,83 +222,88 @@ static int	check_incoming_ns_reply(t_conf *conf, char *buffer)
   int		len = 0;
   
   /* Can be blocking here */
-  while ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
+	while ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
     {
-      if ((conf->client) && (queue_get_udp_data(conf, buffer, len)))
-	{
-	  DPRINTF(2, "Error in queue_get_udp_data\n"); 
-	  return (-1);
-	}
+		if ((conf->client) && (queue_get_udp_data(conf, buffer, len)))
+		{
+			DPRINTF(2, "Error in queue_get_udp_data\n"); 
+			return (-1);
+		}
     }
 #ifdef _WIN32
-  if (len < 0) 
+	if (len < 0) 
     {
-      if (GetLastError() != WSAEWOULDBLOCK) 
-	{
-	  DPRINTF(1, "failed to recv UDP data (%lu)\n", GetLastError());
-	  return (-1);
-	}
+		if (GetLastError() != WSAEWOULDBLOCK) 
+		{
+			DPRINTF(1, "failed to recv UDP data (%lu)\n", GetLastError());
+			return (-1);
+		}
     }
-  /* We can clear the event, we've read all data available */
-  ResetEvent(conf->event_udp);
+	/* We can clear the event, we've read all data available */
+	ResetEvent(conf->event_udp);
 #endif
-  return (0);
+	return (0);
 }
 
 static int	check_incoming_client_data(t_conf *conf, t_fd_event *descriptors, int offset)
 {
-  t_simple_list	*client;
-  
-  for (client = conf->client; client; client = client->next)
+	t_simple_list	*client;
+ 
+	for (client = conf->client; client; client = client->next)
     {      
-      if (socket_is_valid(client->fd_ro)) 
-	{
-	  if (IS_THIS_SOCKET(client->fd_ro, client->control.event, descriptors, offset))
-	    {
-	      if (queue_get_tcp_data(conf, client))
-		return (delete_client(conf, client));
-	      return (0);
+		if (socket_is_valid(client->fd_ro)) 
+		{
+			if (IS_THIS_SOCKET(client->fd_ro, client->control.event, descriptors, offset))
+			{
+				if (queue_get_tcp_data(conf, client))
+					return (delete_client(conf, client));
+				return (0);
 #ifdef _WIN32
-	    } 
-	  else if (IS_THIS_SOCKET(0, client->control.aio.hEvent, descriptors, offset)) 
-	    {
-	      if (queue_get_tcp_data(conf, client))
-		return (delete_client(conf, client));
-	      return  (0);
+			} 
+			else if (IS_THIS_SOCKET(0, client->control.aio.hEvent, descriptors, offset)) 
+			{
+				if (queue_get_tcp_data(conf, client))
+					return (delete_client(conf, client));
+				return  (0);
 #endif
-	    }
-	}
+			}
+		}
     }
-  return (1);
+	return (1);
 }
 
 static int	check_incoming_client(t_conf *conf, t_fd_event *descriptors, int offset)
-{
-  socket_t	sd;
-    
+{   
   /* New client */
-  if (!(conf->use_stdin))
+	if (!(conf->use_stdin))
     {
-      if (socket_is_valid(conf->sd_tcp) 
-	  && (IS_THIS_SOCKET(conf->sd_tcp, conf->event_tcp, descriptors, offset)))
-	{
-	  if ((sd = accept(conf->sd_tcp, 0, 0)) == -1)
-	    {
-	      MYERROR("accept");
-	      return (-1);
-	    }
+		if (socket_is_valid(conf->sd) 
+		&& (IS_THIS_SOCKET(conf->sd, conf->event_tcpsd, descriptors, offset)))
+		{
+			if ((conf->sd_tcp = accept(conf->sd, 0, 0)) == -1)
+			{
+				MYERROR("accept");
+				close(conf->sd_tcp);
+				conf->sd_tcp = -1;
+				return (-1);
+			}
 #ifdef _WIN32
-	  ResetEvent(conf->event_tcp);
+			ResetEvent(conf->event_tcpsd);
 #endif
-	  if (add_client(conf, sd, sd, (process_t)-1))
-	    {
-	      close(sd);
-	      return (-1);
-	    }
-	  return (0);
-	}
+			if (add_client(conf, conf->sd_tcp, conf->sd_tcp, (process_t)-1))
+			{
+				close(conf->sd_tcp);
+				conf->sd_tcp = -1;
+				return (-1);
+			}
+
+			// Accept only 1 client
+			close(conf->sd);
+			conf->sd = -1;
+			return (0);
+		}
     }
-  return (1);
+	return (1);
 }
 
 /**
@@ -309,7 +339,7 @@ static int	get_socket_data(t_conf *conf, t_fd_event *descriptors, int offset)
       return (0);
     }
 #endif
-  
+    
   /* Incoming NS packet */
   if (IS_THIS_SOCKET(conf->sd_udp, conf->event_udp, descriptors, offset))
     return (check_incoming_ns_reply(conf, (char *) buffer));
@@ -319,41 +349,12 @@ static int	get_socket_data(t_conf *conf, t_fd_event *descriptors, int offset)
     return (res);
 
   /* Incoming TCP client */
-  if ((res = check_incoming_client(conf,descriptors, offset)) != 1)
-    return (res);
+  if ((res = check_incoming_client(conf, descriptors, offset)) != 1)
+	  return (res);
 
   return (-1);
 }
 
-/**
- * @brief open a local file and wait for data from DNS stream
- * @param[in] conf configuration
- * @retval 0 on success
- * @retval -1 on error
- * @note
- *   copy-over-DNS
- */
-
-int			open_file(t_conf *conf)
-{
-  int			fd;
-  
-  DPRINTF(1, "Output file is %s\n", (conf->output_file));
-
-  fd = open(conf->output_file,O_CREAT|O_WRONLY|O_TRUNC, 0700);
-  if ( fd == -1)
-    {
-      perror("In open file");
-      return (-1);
-    }
-  /* read will be done in STDIN (unused) */
-  if (add_client(conf, -2, fd, (process_t)-1))
-    {
-      close(fd);
-      return (-1);
-    }
-  return (0);
-}
 
 /**
  * @brief main client loop (wait & process data)
@@ -413,7 +414,7 @@ int		win_check_for_data(t_conf *conf, WSAEVENT *descriptors, int max_fd, struct 
   if ((retval != WAIT_TIMEOUT) && (retval >= WAIT_OBJECT_0))
     {
       if ((get_socket_data(conf, descriptors, (int)(retval - WAIT_OBJECT_0))) 
-	  && (!conf->local_port))
+	  && (!conf->local_port) && (!conf->remote_port))
 	{
 	  DPRINTF(1, "Exiting ..\n");
 	  delete_all_client(conf);
@@ -425,15 +426,6 @@ int		win_check_for_data(t_conf *conf, WSAEVENT *descriptors, int max_fd, struct 
 
 #endif
 
-int	check_for_data(t_conf *conf, t_fd_event *rfds, int max_fd, struct timeval *tv)
-{
-#ifdef _WIN32
-  return (win_check_for_data(conf, rfds, max_fd, tv));
-#else
-  return (unix_check_for_data(conf, rfds, max_fd, tv));
-#endif
-}
-
 /**
  * @brief main client loop (wait & process data)
  * @param[in] conf configuration
@@ -443,37 +435,55 @@ int	check_for_data(t_conf *conf, t_fd_event *rfds, int max_fd, struct timeval *t
 int			do_client(t_conf *conf)
 {
 #ifndef _WIN32
-  fd_set                rfds;
+    fd_set                rfds;
 #else
-  WSAEVENT              rfds[HANDLE_SIZE];
+    WSAEVENT              rfds[HANDLE_SIZE];
 #endif
-  struct timeval        tv;
-  int                   retval;
-  int                   max_fd;
+
+    struct timeval        tv;
+    int                   max_fd;
   
-  if (debug >= 2)
-    fprintf(stderr, "When connected press enter at any time to dump the queue\n");
-  if ((conf->cmdline) && ((retval = create_process(conf))))
-    return (-1);
-  if ((conf->use_stdin) && ((retval = add_client(conf, 0, 1, (process_t)-1))))
-    return (-1);
-  if ((conf->output_file) && ((retval = open_file(conf))))
-    return (-1);
-  while (1)
+    if (debug >= 2)
+        fprintf(stderr, "When connected press enter at any time to dump the queue\n");
+
+    while (1)
     {
-#ifndef _WIN32
-      /* Check for defunc child */
-      if (check_child(conf))
-	return (0);
-      max_fd = prepare_select(conf, &rfds, &tv);
-      if (check_for_data(conf, &rfds, max_fd, &tv))
-	return (-1);
+        // Either didnt start listening or incoming client closed connection
+        // So start listening again!
+        if (conf->is_local_port_forwarding && conf->sd == -1 && conf->sd_tcp == -1
+            && bind_socket(conf))
+        {
+            DPRINTF(1, "conf->sd_tcp == -1 and conf->sd == -1. Starting listening\n");
+            close(conf->sd_tcp);
+            conf->sd_tcp = -1;
+            close(conf->sd);
+            conf->sd = -1;
+            return (-1);
+        }
+
+        if (!conf->is_local_port_forwarding && conf->sd_tcp == -1)
+        {
+            DPRINTF(1, "conf->sd_tcp == -1. Reconnecting\n");
+            if (connect_socket(conf) || add_client(conf, conf->sd_tcp, conf->sd_tcp, (process_t)-1))
+            {
+                close(conf->sd_tcp);
+                conf->sd_tcp = -1;
+                return (-1);
+            }
+        }
+#ifdef _WIN32
+        max_fd = prepare_select(conf, rfds, &tv);
+        if (win_check_for_data(conf, rfds, max_fd, &tv))
 #else
-      max_fd = prepare_select(conf, rfds, &tv);
-      if (check_for_data(conf, rfds, max_fd, &tv))
-	return (-1);
+        /* Check for defunc child */
+        if (check_child(conf))
+            return (0);
+        max_fd = prepare_select(conf, &rfds, &tv);
+        if (unix_check_for_data(conf, &rfds, max_fd, &tv))
+            return (-1);
 #endif
-      check_for_resent(conf);
+
+        check_for_resent(conf);
     }
-  return (-1);
+    return (-1);
 }

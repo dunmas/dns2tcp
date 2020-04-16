@@ -22,8 +22,9 @@
 #define __AUTH_H__
 
 int	login_user(t_conf *conf, t_request *, t_packet *, t_simple_list *);
-uint16_t create_env(t_conf *conf, void *req, char *resource, int in_len);
 uint8_t is_authenticated(t_conf *, void *req, int in_len);
 int	 bind_user(t_conf *conf, t_request *, t_packet *, t_simple_list *);
+int	 check_connected(t_conf *conf, t_request *, t_packet *, t_simple_list *);
+int	 disconnected(t_conf *conf, t_request *req, t_packet *packet, t_simple_list *client);
 
 #endif

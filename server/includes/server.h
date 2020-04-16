@@ -42,7 +42,6 @@
 
 
 typedef struct		s_conf {
-  struct s_list		*resources;
   struct s_simple_list	*client;
   int			sd_udp;
   char			*my_domain;
@@ -53,7 +52,6 @@ typedef struct		s_conf {
   char			*pidfile;
   char			*key;
   uint16_t		port;
-  uint8_t		list_resource;
   uint8_t		trace_enable;
 #define TRACE_AVAILABLE	(1 << 0)
 #define TRACE_ENABLE	(1 << 1)

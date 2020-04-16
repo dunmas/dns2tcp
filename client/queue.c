@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <stdbool.h>
 
 #include "dns.h"
 #include "list.h"
@@ -650,6 +651,11 @@ int			queue_get_tcp_data(t_conf *conf, t_simple_list *client)
 #else
       req.len = read(client->fd_ro, &req.req_data[PACKET_LEN], max_len);
 #endif
+
+	  /* num_seq must not be null */
+	  if (!++client->num_seq)
+		  client->num_seq++;
+
       if (req.len <= 0)
 	{
 	  req.len = -1;
@@ -657,9 +663,6 @@ int			queue_get_tcp_data(t_conf *conf, t_simple_list *client)
 	  queue_send(conf, client, queue);
 	  return (-1); 
 	}
-      /* num_seq must not be null */
-      if (!++client->num_seq)
-	client->num_seq++;
       
       DPRINTF(3, "Read tcp %d bytes on sd %d, crc = 0x%x\n", req.len, client->fd_ro,
 	      crc16((const char *)&req.req_data[PACKET_LEN], req.len)

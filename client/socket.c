@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <stdbool.h>
 
 #ifndef _WIN32
 #include <netdb.h>
@@ -154,6 +155,8 @@ static int	set_nonblock(socket_t sd)
   return (0);
 }
 
+
+
 /**
  * @brief listen on wanted interfaces
  * @param[in] conf configuration
@@ -163,43 +166,76 @@ static int	set_nonblock(socket_t sd)
 
 int			bind_socket(t_conf *conf)
 {
-  struct sockaddr_in	sa;
+	struct sockaddr_in	sa;
 #ifndef _WIN32
-  int			optval = 1;
+	int			optval = 1;
 #else
-  const		char	optval = 1;
+	const		char	optval = 1;
 #endif
 
-  memset(&sa,0,sizeof(struct sockaddr_in));
-  sa.sin_port = htons(conf->local_port);
-  sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-  sa.sin_family = AF_INET;
-  if ((conf->sd_tcp = socket(PF_INET, SOCK_STREAM, 0)) < 0)
-    {
-      MYERROR("socket error %hd", conf->local_port);
-      return (-1);
-    }
-  if (!setsockopt(conf->sd_tcp, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))
-    {
-      if (bind(conf->sd_tcp, (struct sockaddr *) &sa, sizeof(struct sockaddr_in)) < 0)
+	memset(&sa, 0, sizeof(struct sockaddr_in));
+	sa.sin_port = htons(conf->local_port);
+	sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	sa.sin_family = AF_INET;
+	if ((conf->sd = socket(PF_INET, SOCK_STREAM, 0)) < 0)
 	{
-	  perror("bind error");
-	  return (-1);
+		MYERROR("socket error %hd", conf->local_port);
+		return (-1);
 	}
+	if (!setsockopt(conf->sd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))
+	{
+		if (bind(conf->sd, (struct sockaddr *) &sa, sizeof(struct sockaddr_in)) < 0)
+		{
+			perror("bind error");
+			return (-1);
+		}
 #ifdef _WIN32
-      if (!(conf->event_tcp = WSACreateEvent())
-	  || (WSAEventSelect(conf->sd_tcp, conf->event_tcp, FD_ACCEPT) == SOCKET_ERROR))
-	MYERROR("WSAEvent error\n");
+		if (!(conf->event_tcpsd = WSACreateEvent())
+			|| (WSAEventSelect(conf->sd, conf->event_tcpsd, FD_ACCEPT) == SOCKET_ERROR))
+			MYERROR("WSAEvent error\n");
 #endif
-      if ((!set_nonblock(conf->sd_tcp))
-	  && (!listen(conf->sd_tcp, 10)))
-	{
-	  fprintf(stderr, "Listening on port : %d\n", conf->local_port);
-	  return (0);
+		if ((!set_nonblock(conf->sd))
+			&& (!listen(conf->sd, 10)))
+		{
+			fprintf(stderr, "Listening on port : %d\n", conf->local_port);
+			return (0);
+		}
 	}
-    }
-  MYERROR("Socket_error");
-  return (-1);      
+	MYERROR("Socket_error");
+	return (-1);
+}
+
+
+int			connect_socket(t_conf *conf)
+{
+	struct sockaddr_in	sa;
+#ifndef _WIN32
+	int			optval = 1;
+#else
+	const		char	optval = 1;
+#endif
+
+	memset(&sa, 0, sizeof(struct sockaddr_in));
+	sa.sin_port = htons(conf->remote_port);
+	sa.sin_addr.s_addr = inet_addr(conf->remote_host);
+	sa.sin_family = AF_INET;
+	DPRINTF(1, "Connecting to %s : %hd\n", conf->remote_host, conf->remote_port);
+	if ((conf->sd_tcp = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+	{
+		MYERROR("socket error %hd", conf->remote_port);
+		return (-1);
+	}
+	if (connect(conf->sd_tcp, (struct sockaddr *) &sa, sizeof(struct sockaddr_in)) < 0)
+	{
+		perror("socket connect error");
+		return (-1);
+	}
+
+	if (!set_nonblock(conf->sd_tcp))
+	{
+		fprintf(stderr, "Connected to port : %d\n", conf->remote_port);
+		return (0);
+	}
 }
 
 /**

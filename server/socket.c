@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <fcntl.h>
 #ifndef _WIN32
 #include <sys/socket.h>     
 #include <sys/types.h>
@@ -39,7 +40,7 @@
  * @param[in] conf configuration
  **/
 
-int				bind_socket(t_conf *conf)
+int				bind_socket_dns(t_conf *conf)
 {
   int				ret;
   union sockaddr_u		su;
@@ -110,86 +111,100 @@ int				bind_socket(t_conf *conf)
   return (0);      
 }
 
+
+/**
+ * @brief non blocking IO
+ * @param[in] sd socket
+ * @retval 0 on success
+ * @retval -1 on error
+ **/
+
+static int	set_nonblock(socket_t sd)
+{
+#ifndef _WIN32
+  int		opt;
+
+  if ((opt = fcntl(sd, F_GETFL)) == -1)
+    return (-1);
+  if ((opt = fcntl(sd, F_SETFL, opt|O_NONBLOCK)) == -1)
+    return (-1);
+#endif
+  return (0);
+}
+
+
+
 /**
  * @brief connect to a resource
- * @param[in] name resource to connet to
- * @param[in] port port to connect to
+ * @param[in] port port to bind to
  * @param[out] socket descriptor
  **/
 
-int			connect_socket(char *name, uint16_t port, int *sd)
+int			bind_socket_tcp(uint16_t port, int *sd)
 {
   int ret;
+  int  optval;
   char *host, *end;
   struct sockaddr_storage ss;
-  struct addrinfo *res, *ptr, hints;
+  struct addrinfo *res, *ptr;
+  struct sockaddr_in addr;
 
-  /* strip [] from "[ip]" */
-  if (*name == '[')
-    {
-      end = strchr(name+1, ']');
-      if (!end || end[1] || (end == name+1))
-        {
-          MYERROR("invalid resource's name (missing ']')\n");
-	  return (-1);
-        }
-      if (!(host = strdup(name+1)))
-        {
-	  MYERROR("cannot duplicate hostname\n");
-	  return (-1);
-        }
-      host[end-name-1] = 0;
-    }
-  else
-    {
-      host = name;
-    }
 
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_flags    = AI_CANONNAME;
-  hints.ai_family   = PF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-  res = NULL;
-  ret = getaddrinfo(host, NULL, &hints, &res);
-  if (ret || !res)
-    {
-      MYERROR("getaddrinfo: %s (%s)\n", gai_strerror(ret), host);
-      if (host != name)
-	free(host);      
-      return (-1);
-    }
-  if (host != name)
-    free(host);
-  for (ptr=res; ptr; ptr=ptr->ai_next)
-    {
-      memset(&ss, 0, sizeof(ss));
-      switch (ptr->ai_family) {
-        case AF_INET:
-	  ((struct sockaddr_in *) ptr->ai_addr)->sin_port = htons(port);
-	  break;
-	case AF_INET6:
-	  ((struct sockaddr_in6 *) ptr->ai_addr)->sin6_port = htons(port);
-	  break;
-	default:
-	  return (-1);
-      }
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(port);
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-      ss.ss_family = ptr->ai_family;
-      if ((*sd = socket(ptr->ai_family, SOCK_STREAM, 0)) < 0)
-        {
-	  MYERROR("socket error");
-	  break;
+  if ((*sd = socket(PF_INET, SOCK_STREAM, 0)) < 0)
+  {
+    MYERROR("socket error %hd", port);
+    return (-1);
+  }
+  if (!setsockopt(*sd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))
+  {
+    if (bind(*sd, (struct sockaddr *) &addr, sizeof(addr)) < 0)
+	{
+  	  perror("bind error");
+	  return (-1);
 	}
-      DPRINTF(1, "Connecting to %s port %d\n", name, port);
-      if (!connect(*sd, ptr->ai_addr, ptr->ai_addrlen)) {
-	freeaddrinfo(res);
-        return (0);
-      }
-
-      MYERROR("connect error");
-      close(*sd);
-    }
-  freeaddrinfo(res);
-  return (-1);
+    if ((!set_nonblock(*sd)) && (!listen(*sd, 10)))
+	{
+	  fprintf(stderr, "Listening on port : %d\n", port);
+	  return (0);
+	}
+  }
+  MYERROR("Socket_error");
+  return (-1);      
 }
 
+
+int			connect_socket(in_addr_t address, uint16_t port, int *sd)
+{
+    struct sockaddr_in sa;
+
+	memset(&sa, 0, sizeof(struct sockaddr_in));
+	sa.sin_port = htons(port);
+	sa.sin_addr.s_addr = address; //htonl(address);
+	sa.sin_family = AF_INET;
+    
+    if ((*sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+    {
+        MYERROR("socket error");
+        return (-1);
+	}
+    DPRINTF(1, "sd = %d  port = %d  address = %d\n", *sd, port, address);
+	if (connect(*sd, (struct sockaddr *) &sa, sizeof(struct sockaddr_in)) < 0)
+	{
+		perror("socket connect error");
+		return (-1);
+	}
+	if (!set_nonblock(*sd))
+	{
+		fprintf(stderr, "Connected to port : %d\n", port);
+		return (0);
+	}
+
+    MYERROR("connect error");
+    close(*sd);
+    *sd = -1;
+    return (-1);
+}

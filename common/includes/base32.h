@@ -1,6 +1,6 @@
 /*
 ** Copyright (C) 2006 Olivier DEMBOUR
-** $Id: requests.h,v 1.4.4.2 2010/02/10 15:29:51 dembour Exp $
+** $Id: base64.h,v 1.3 2008/08/04 15:31:07 dembour Exp $
 **
 ** 
 ** This program is free software; you can redistribute it and/or modify
@@ -18,21 +18,27 @@
 ** Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-#ifndef __REQUESTS_H__
-#define  __REQUESTS_H__
+#ifndef __BASE_32_H
+#define __BASE_32_H
 
-typedef struct s_command {
-  const char	*str;
-  uint8_t	str_len;
-  uint8_t	authenticated;
-  int		(*deal_cmd)(t_conf *, t_request *, t_packet *, t_simple_list *);
-}		t_command;
+#undef MIN
+#define MIN(a,b)	((a) > (b) ? (b) : (a))
 
-int	get_incoming_request(t_conf *);
-int	send_reply(t_conf *conf, t_request *req, t_data *data);
-int	send_ascii_reply(t_conf *conf, t_request *req, t_packet *packet, char *data);
-void    *add_reply(struct dns_hdr *, void *, uint16_t , char *);
-int	get_request(t_conf *conf, t_request *req, t_data *output);
 
+/* 
+  Bloc size = 4
+  each bloc is 3 of real data
+*/
+#define BASE32_SIZE(len)  (((len)/5)*8 + ((len) % 5 ? 8 : 0))
+#define DECODED_BASE32_SIZE(len)  (((len)/8)*5)
+
+
+extern int base32_encode(char *plain, char *coded, int len);
+extern int base32_decode(char *plain, char *coded);
+
+#ifndef HAVE_STRCASESTR
+extern char *strcasestr(const char *, const char *);
+#endif
 
 #endif
+
