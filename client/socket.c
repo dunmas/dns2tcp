@@ -206,32 +206,27 @@ int			bind_socket(t_conf *conf)
 }
 
 
-int			connect_socket(t_conf *conf)
+int			connect_socket(t_conf *conf, socket_t* tsock)
 {
 	struct sockaddr_in	sa;
-#ifndef _WIN32
-	int			optval = 1;
-#else
-	const		char	optval = 1;
-#endif
 
 	memset(&sa, 0, sizeof(struct sockaddr_in));
 	sa.sin_port = htons(conf->remote_port);
 	sa.sin_addr.s_addr = inet_addr(conf->remote_host);
 	sa.sin_family = AF_INET;
 	DPRINTF(1, "Connecting to %s : %hd\n", conf->remote_host, conf->remote_port);
-	if ((conf->sd_tcp = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
+	if ((*tsock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
 	{
 		MYERROR("socket error %hd", conf->remote_port);
 		return (-1);
 	}
-	if (connect(conf->sd_tcp, (struct sockaddr *) &sa, sizeof(struct sockaddr_in)) < 0)
+	if (connect(*tsock, (struct sockaddr *) &sa, sizeof(struct sockaddr_in)) < 0)
 	{
 		perror("socket connect error");
 		return (-1);
 	}
 
-	if (!set_nonblock(conf->sd_tcp))
+	if (!set_nonblock(*tsock))
 	{
 		fprintf(stderr, "Connected to port : %d\n", conf->remote_port);
 		return (0);

@@ -100,7 +100,6 @@ uint16_t		disconnect_client(t_conf *conf, uint16_t session_id)
 	char			domain[MAX_DNS_LEN + 1];
 	char			*resource;
 	t_request		request;
-	t_packet		*packet;
 
 	if (create_simple_req(conf, &request, DISCONNECTED, (char *)&domain, session_id))
 		return(-1);

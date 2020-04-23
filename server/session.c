@@ -69,7 +69,7 @@ static uint16_t		new_sessionid(t_conf *conf)
  * @retval -1 on error
  **/
 
-t_simple_list		*create_session(t_conf *conf, t_request *req, t_packet *packet)
+t_simple_list		*create_session(t_conf *conf)
 {
   t_simple_list		*client;
   uint16_t		rand;
@@ -104,24 +104,6 @@ t_simple_list		*create_session(t_conf *conf, t_request *req, t_packet *packet)
   client->sd_tcp = -1; /* No endpoint yet */
   client->sd = -1; /* No endpoint yet */
   client_update_timer(client);
-
-  if ((packet->type & USE_COMPRESS) == USE_COMPRESS)
-    client->control.use_compress = 1;
-  
-  LOG("Creating session id: 0x%x address = %u.%u.%u.%u (compression %s wanted)", client->session_id,
-#ifndef WORDS_BIGENDIAN
-      (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff)
-#else
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
-      (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff)
-#endif
-      , client->control.use_compress ? "" :"NOT"
-      );
   return (client);
 }
 

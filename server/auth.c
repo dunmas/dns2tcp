@@ -65,6 +65,11 @@ static int		connect_resource(t_conf *conf, t_request *req, t_packet *packet, t_s
         // Client runs in -R mode
         client->is_local_port_forwarding = false;
         client->port = atoi(resource);
+        
+        DPRINTF(1, "Binding to port %d\n", client->port);
+        if (! bind_socket_tcp(client->port, sd))
+            return (0);
+        delete_client(conf, client);
 	}
     else
     {
@@ -80,12 +85,6 @@ static int		connect_resource(t_conf *conf, t_request *req, t_packet *packet, t_s
     {
         DPRINTF(1, "Connecting to host %s port %d\n", resource, client->port);
         if (! connect_socket(client->address, client->port, sd))
-            return (0);
-    }
-    else
-    {
-        DPRINTF(1, "Binding to port %d\n", client->port);
-        if (! bind_socket_tcp(client->port, sd))
             return (0);
     }
         
@@ -107,7 +106,7 @@ static int		connect_resource(t_conf *conf, t_request *req, t_packet *packet, t_s
 
 int			bind_user(t_conf *conf, t_request *req, t_packet *packet, t_simple_list *client)
 {
-    int			sd;
+    int			    sd;
     char			*resource;
     char			*compress;
 
@@ -190,40 +189,59 @@ int			disconnected(t_conf *conf, t_request *req, t_packet *packet, t_simple_list
 
 int		login_user(t_conf *conf, t_request *req, t_packet *packet)
 {
-  char		*data;
-  t_simple_list	*client;
-  char		 buffer[SHA1_SIZE*2+1];
+    char		*data;
+    t_simple_list	*client;
+    char		 buffer[SHA1_SIZE*2+1];
   
-  memset(buffer, 0, sizeof(buffer));
-  if (req->len <= PACKET_LEN)
-    return (-1);
-  data =  ((char *) packet) + PACKET_LEN;
-  client = find_client_by_session_id(conf, packet->session_id);
-  if (client)
+    memset(buffer, 0, sizeof(buffer));
+    if (req->len <= PACKET_LEN)
+        return (-1);
+    data =  ((char *) packet) + PACKET_LEN;
+    client = find_client_by_session_id(conf, packet->session_id);
+    if (client)
     {	
-      if (conf->key)
-	{
-	  sign_challenge(client->control.challenge, CHALLENGE_SIZE, conf->key, (char *)&buffer, sizeof(buffer));
-	  if (strncmp(buffer, data, SHA1_SIZE*2))
-	    {
-	      packet->type = ERR;
-	      LOG("Authentication failed");
-	      send_ascii_reply(conf, req, packet, ERR_AUTH_FAILED);	        
-	      return (delete_client(conf, client));
-	    }
-	}
-      client_update_timer(client);
-      client->control.authenticated = 1;
-      client->sd_tcp = -1;
-      client->sd = -1;
-      packet->type = OK;
-      return (send_ascii_reply(conf, req, packet, ""));
+        if (conf->key)
+        {
+            sign_challenge(client->control.challenge, CHALLENGE_SIZE, conf->key, (char *)&buffer, sizeof(buffer));
+            if (strncmp(buffer, data, SHA1_SIZE*2))
+            {
+                packet->type = ERR;
+                LOG("Authentication failed");
+                send_ascii_reply(conf, req, packet, ERR_AUTH_FAILED);	        
+                return (delete_client(conf, client));
+            }
+        }
+        client_update_timer(client);
+        client->control.authenticated = 1;
+        client->sd_tcp = -1;
+        client->sd = -1;
+        packet->type = OK;
+        return (send_ascii_reply(conf, req, packet, ""));
     }
-  if (!(client = create_session(conf, req, packet)))
-    return (-1);
-  alphanum_random(client->control.challenge, CHALLENGE_SIZE);
-  packet->type = OK;
-  packet->session_id = client->session_id;
-  return (send_ascii_reply(conf, req, packet, client->control.challenge));
+    if (!(client = create_session(conf)))
+        return (-1);
+    
+    if ((packet->type & USE_COMPRESS) == USE_COMPRESS)
+        client->control.use_compress = 1;
+
+    LOG("Creating session id: 0x%x address = %u.%u.%u.%u (compression %s wanted)", client->session_id,
+#ifndef WORDS_BIGENDIAN
+        (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff)
+#else
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff)
+#endif
+        , client->control.use_compress ? "" :"NOT"
+    );
+      
+    alphanum_random(client->control.challenge, CHALLENGE_SIZE);
+    packet->type = OK;
+    packet->session_id = client->session_id;
+    return (send_ascii_reply(conf, req, packet, client->control.challenge));
 }
 

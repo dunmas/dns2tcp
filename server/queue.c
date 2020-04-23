@@ -133,7 +133,7 @@ static int		queue_copy_data(t_simple_list *client, t_list *queue, t_packet *pack
       memcpy(queue->peer.data, data, len - PACKET_LEN);
       queue->peer.len = len - PACKET_LEN;
     }
-  DPRINTF(3, "[queue_copy_data] packet->type is %d\n", packet->type);
+  DPRINTF(2, "[queue_copy_data] client sess id is 0x%x    packet->type is %d\n", client->session_id, packet->type);
   if (packet->type == NOP)
     queue->peer.len = 0;
   if (packet->type == DESAUTH)
@@ -385,7 +385,7 @@ static int		queue_deal_incoming_data(t_conf *conf, t_simple_list *client, t_list
     return (-1);
   if (queue)
     {
-      DPRINTF(3, "[queue_deal_incoming_data] queue->status is %d\n", queue->status);
+      DPRINTF(2, "[queue_deal_incoming_data] queue->status is %d\n", queue->status);
       hdr = (void *)queue->data;
       switch (queue->status) 
 	{
@@ -468,6 +468,62 @@ int			queue_read_tcp(t_conf *conf, t_simple_list *client)
     client->control.queue_full = 1;
     return (0);
 }
+
+
+/**
+ * @brief read TCP data and put it in the next reply
+ * @param[in] conf configuration
+ * @param[int] client 
+ * @retval 0 on success
+ * @retval -1 on error
+ **/
+
+int			queue_put_sessionid(t_conf *conf, t_simple_list *client)
+{
+    t_list		*queue;
+    struct dns_hdr	*hdr;
+    int			len;
+    int         tsocket;
+    t_simple_list		*accepted_client;
+    
+    for (queue = client->queue; queue; queue = queue->next)
+    {
+        if (queue->status == FREE)
+	        break;
+        if (queue->status == USED)
+	    {
+	        hdr = (struct dns_hdr *) queue->data;
+	        if ((len = queue->peer.reply_functions->rr_available_len(hdr, client, queue->len)) > 0)
+	        {
+	            DPRINTF(1, "Accept on RPF socket: session id 0x%x\n", client->session_id);
+                tsocket = accept(client->sd, 0, 0);
+                if (tsocket < 0)
+                {
+                    MYERROR("accept");
+                    return (-1);
+                }
+                if (!(accepted_client = create_session(conf)))
+                {
+                    close(tsocket);
+                    MYERROR("create_session");
+                    return (-1);
+                }
+                accepted_client->sd = -1;
+                accepted_client->sd_tcp = tsocket;
+                accepted_client->control.use_compress = client->control.use_compress;
+                DPRINTF(1, "Created new client for RPF: session id 0x%x\n", accepted_client->session_id);
+                
+	            queue_reply(conf, client, queue, &accepted_client->session_id, 2);
+	            return (0);
+	        }
+	        DPRINTF(1, "Query too long for a reply\n");
+	    }
+    }
+    client->control.queue_full = 1;
+    return (0);
+}
+
+
 
 /**
  * @brief queue_dump for debug
@@ -644,7 +700,7 @@ int		queue_put_data(t_conf *conf, t_request *req, t_data *decoded_data)
     DPRINTF(2, "Packet [%d] decoded, data_len %d\n", packet->seq, decoded_data->len - (int)PACKET_LEN);
     if ((client = find_client_by_session_id(conf, packet->session_id)))
     { 
-        if (client->sd_tcp < 0)
+        if (client->sd_tcp < 0 && client->is_local_port_forwarding)
 	        return (0); /* slient drop */
         client_update_timer(client);
         queue = client->queue;

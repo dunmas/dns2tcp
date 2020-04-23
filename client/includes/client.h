@@ -27,7 +27,7 @@
 */
 
 #define RESOLV_CONF	"/etc/resolv.conf"
-#define QUEUE_SIZE	48
+#define QUEUE_SIZE	256
 
 #define WINDOW_SIZE	(QUEUE_SIZE / 2)
 #define	NOP_SIZE	(WINDOW_SIZE / 3)
@@ -35,7 +35,7 @@
 #define	MAX_DATA_SIZE	(WINDOW_SIZE - NOP_SIZE)
 
 #define SOCKET_TIMEOUT  1 /* 1s */
-#define REPLY_TIMEOUT	1 /* 1s */
+#define REPLY_TIMEOUT	3 /* 1s */
 
 
 #include "packet.h"
@@ -70,7 +70,9 @@ typedef struct		s_conf {
 }			t_conf;
 
 int		add_client(t_conf *conf, socket_t fd_ro,
-			   socket_t fd_wo, process_t pid);
+			   socket_t fd_wo);
+int		add_rpf_client(t_conf *conf, socket_t fd_ro,
+				socket_t fd_wo, uint16_t session_id);
 
 int delete_client(t_conf *conf, struct s_simple_list *client);
 int do_client(t_conf *);

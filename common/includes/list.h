@@ -85,4 +85,5 @@ int		list_destroy_cell(t_list *);
 int		list_destroy_simple_cell(t_simple_list *);
 int		list_add_cell(t_list *, t_list *);
 
+
 #endif

@@ -22,6 +22,6 @@
 #define  __SESSION_H__
 
 int		session_request(t_conf *, t_request *, t_data *);
-t_simple_list	*create_session(t_conf *, t_request *, t_packet *);
+t_simple_list	*create_session(t_conf *);
      
 #endif

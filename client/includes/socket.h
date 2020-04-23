@@ -30,6 +30,7 @@
 
 int		socket_is_valid(socket_t );
 int		bind_socket(t_conf *);
+int		connect_socket(t_conf *, socket_t* tsock);
 socket_t	create_socket(t_conf *);
 uint16_t	get_simple_reply(t_conf *, char *, uint16_t);
 

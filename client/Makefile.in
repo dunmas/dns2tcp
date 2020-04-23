@@ -49,7 +49,7 @@ am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_dns2tcpc_OBJECTS = hmac_sha1.$(OBJEXT) select.$(OBJEXT) \
 	crc16.$(OBJEXT) rr.$(OBJEXT) mycrypto.$(OBJEXT) \
-	command.$(OBJEXT) session.$(OBJEXT) config.$(OBJEXT) \
+	session.$(OBJEXT) config.$(OBJEXT) \
 	queue.$(OBJEXT) client.$(OBJEXT) list.$(OBJEXT) \
 	myrand.$(OBJEXT) auth.$(OBJEXT) dns.$(OBJEXT) \
 	mystrnlen.$(OBJEXT) requests.$(OBJEXT) memdump.$(OBJEXT) \
@@ -175,7 +175,6 @@ dns2tcpc_SOURCES = \
 			../common/crc16.c	\
 			rr.c			\
 			../common/mycrypto.c	\
-			command.c		\
 			session.c		\
 			../common/config.c	\
 			queue.c			\
@@ -278,7 +277,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/base64.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/base32.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/client.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/command.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/config.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/crc16.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dns.Po@am__quote@

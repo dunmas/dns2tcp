@@ -31,6 +31,7 @@
 #include "myerror.h"
 #include "requests.h"
 #include "queue.h"
+#include "session.h"
 #include "debug.h"
 #include "log.h"
 
@@ -208,29 +209,26 @@ int			do_server(t_conf *conf)
                 {
                     if (queue_read_tcp(conf, client))
                     {
-                      if (client->sd != -1)
-                      {
-                          close(client->sd);
-                          client->sd = -1;
-                      }
-                      if (client->sd_tcp != -1)
-                      {
-                          close(client->sd_tcp);
-                          client->sd_tcp = -1;
-                      }
-                      delete_client(conf, client);
+                        if (client->sd_tcp != -1)
+                        {
+                            close(client->sd_tcp);
+                            client->sd_tcp = -1;
+                        }
+                        delete_client(conf, client);
                     }
                 }
+                // remote port forwarding listener
                 if ((client->sd != -1) && (FD_ISSET(client->sd, &rfds)))
                 {
-                    client->sd_tcp = accept(client->sd, 0, 0);
-                    if (client->sd_tcp < 0)
+                    if (queue_put_sessionid(conf, client))
                     {
-                        MYERROR("accept");
-                        // exit
-                    }
-                    close(client->sd);
-                    client->sd = -1;
+                        if (client->sd != -1)
+                        {
+                            close(client->sd);
+                            client->sd = -1;
+                        }
+                        delete_client(conf, client);
+                    }   
                 }
             }
 	    }

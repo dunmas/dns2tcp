@@ -24,6 +24,7 @@
 int		queue_put_data(t_conf *conf, t_request *req, t_data *data);
 t_list		*init_queue();
 int		queue_read_tcp(t_conf *conf, t_simple_list *client);
+int		queue_put_sessionid(t_conf *conf, t_simple_list *client);
 int		queue_delete_zombie(t_conf * conf);
 void		client_update_timer(struct s_simple_list *client);
 int		delete_queue(struct s_list *queue);

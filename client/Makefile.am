@@ -8,7 +8,6 @@ dns2tcpc_SOURCES =	\
 			../common/crc16.c	\
 			rr.c			\
 			../common/mycrypto.c	\
-			command.c		\
 			session.c		\
 			../common/config.c	\
 			queue.c			\

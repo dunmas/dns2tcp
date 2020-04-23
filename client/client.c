@@ -48,9 +48,9 @@
 #include "queue.h"
 #include "auth.h"
 #include "debug.h"
-#include "command.h"
 #include "socket.h"
 #include "select.h"
+#include "requests.h"
 
 /**
  * @brief disconnect client
@@ -62,55 +62,76 @@
 
 int		delete_client(t_conf *conf, t_simple_list *client)
 {
-  t_simple_list	*tmp;
-#ifndef _WIN32
-  int		status;
-#endif  
+	t_simple_list	*tmp;
   
-  DPRINTF(1, "free client \n");
-#ifndef _WIN32
-  if (client->pid > 0)
-    kill(client->pid, SIGKILL);
-  if (conf->sd_tcp)
-    waitpid(-1, &status, WNOHANG);
+	DPRINTF(1, "free client \n");
+
+	if (conf->client == client)
+    {
+		if ((client->fd_ro != client->fd_wo) && (client->fd_ro != -1))
+		{
+			DPRINTF(2, "Closing client->fd_wo\n");
+#ifdef _WIN32
+			shutdown(client->fd_wo, SD_SEND);
 #else
-  if (client->pid != (process_t)-1)
-    {
-      TerminateProcess(client->pid, 0);
-      CloseHandle(client->pid);
-      client->pid = (process_t) -1;
-    }
+			shutdown(client->fd_wo, SHUT_WR);
 #endif
-  if (conf->client == client)
-    {
-      if ((client->fd_ro != client->fd_wo) && (client->fd_ro != -1))
-	close (client->fd_wo);
-      if (!(client->fd_ro < 0))
-	close (client->fd_ro);
-      tmp = client->next;
-      delete_queue(client->saved_queue);
-      list_destroy_simple_cell(conf->client);
-      conf->client = tmp;
-	  if (conf->sd_tcp != -1)
-	  {
-		  close(conf->sd_tcp);
-		  conf->sd_tcp = -1;
-	  }
-      /* Exit no listenning port and no valid socket */
-      return ( !conf->local_port && !socket_is_valid(conf->sd_tcp));
+			close(client->fd_wo);
+		}
+		if (!(client->fd_ro < 0))
+		{
+			DPRINTF(2, "Closing client->fd_ro\n");
+#ifdef _WIN32
+			shutdown(client->fd_ro, SD_SEND);
+#else
+			shutdown(client->fd_ro, SHUT_WR);
+#endif
+			close(client->fd_ro);
+		}
+		tmp = client->next;
+		delete_queue(client->saved_queue);
+		list_destroy_simple_cell(conf->client);
+		conf->client = tmp;
+		if (conf->sd_tcp != -1)
+		{
+			close(conf->sd_tcp);
+			conf->sd_tcp = -1;
+		}
+		/* Exit no listenning port and no valid socket */
+		return ( !conf->local_port && !socket_is_valid(conf->sd_tcp));
     }
-  for (tmp = conf->client; tmp; tmp = tmp->next)
+	for (tmp = conf->client; tmp; tmp = tmp->next)
     {
-      if (tmp->next == client)
-	{
-	  tmp->next = client->next;
-	  delete_queue(client->saved_queue);
-	  return (list_destroy_simple_cell(client) && 
-		  /* Exit no listenning port and no valid socket */
-		  (!conf->local_port) && !socket_is_valid(conf->sd_tcp));
-	}
+		if (tmp->next == client)
+		{
+			if ((client->fd_ro != client->fd_wo) && (client->fd_ro != -1))
+			{
+				DPRINTF(1, "Closing client->fd_wo\n");
+#ifdef _WIN32
+				shutdown(client->fd_ro, SD_SEND);
+#else
+				shutdown(client->fd_ro, SHUT_WR);
+#endif
+				close(client->fd_wo);
+			}
+			if (!(client->fd_ro < 0))
+			{
+				DPRINTF(1, "Closing client->fd_ro\n");
+#ifdef _WIN32
+				shutdown(client->fd_ro, SD_SEND);
+#else
+				shutdown(client->fd_ro, SHUT_WR);
+#endif
+				close(client->fd_ro);
+			}
+			tmp->next = client->next;
+			delete_queue(client->saved_queue);
+			return (list_destroy_simple_cell(client) && 
+				/* Exit no listenning port and no valid socket */
+				(!conf->local_port) && !socket_is_valid(conf->sd_tcp));
+		}
     }
-  return (-1);
+	return (-1);
 }
 
 static int	delete_all_client(t_conf *conf)
@@ -127,92 +148,139 @@ static int	delete_all_client(t_conf *conf)
  * @param[in] conf configuration
  * @param[in] fd_ro read file descriptor
  * @param[in] fd_wo write file descriptor (may be same as fd_ro)
- * @param[in] pid process id related to this session (-1 if no fork)
  * @retval 0 on success
  * @retval -1 on error
  */
 int		add_client(t_conf *conf, socket_t fd_ro,
-			   socket_t fd_wo, process_t pid)
+	socket_t fd_wo)
 {
 	uint16_t	session_id;
 	t_simple_list	*client;
 #ifdef _WIN32
 	HANDLE	evt;
 #endif
-  
+
 	if (!((session_id = create_session(conf))))
 		return (-1);
 	if (connect_resource(conf, session_id))
 		return (-1);
 	DPRINTF(1, "Adding client auth OK: 0x%hx\n", session_id);
 
-	// check_resource_connected 0 - CONNECTED
-	// check_resource_connected 2 - NOT CONNECTED YET
-	// check_resource_connected 1 - ERROR
-
-	if (!conf->is_local_port_forwarding)
-	{
-		int res = check_resource_connected(conf, session_id);
-		while (res == 2)
-		{
-			DPRINTF(1, "Resource is not connected yet\n");
-			sleep(1);
-			res = check_resource_connected(conf, session_id);
-			DPRINTF(1, "check_resource_connected returned %i\n", res);
-		}
-		if (res == 1)
-			return (-1);
-	}
-
 	if (!(conf->client))
-    {
+	{
 		if (!(conf->client = list_create_simple_cell()))
 			return (-1);
 		client = conf->client;
-    }
+	}
 	else
-    {
+	{
 		client = conf->client;
 		while (client->next)
 			client = client->next;
 		if (!(client->next = list_create_simple_cell()))
 			return (-1);
 		client = client->next;
-    }
+	}
 #ifdef _WIN32
-	if (pid == (process_t) -1)
-    {
+	if (socket_is_valid(fd_ro))
+	{
 		if ((!((client->control.event = WSACreateEvent())))
-			|| (WSAEventSelect(fd_ro, client->control.event, FD_READ|FD_ACCEPT|FD_CLOSE) == SOCKET_ERROR))
+			|| (WSAEventSelect(fd_ro, client->control.event, FD_READ | FD_ACCEPT | FD_CLOSE) == SOCKET_ERROR))
 		{
 			MYERROR("WSAEvent error\n");
 			return (-1);
 		}
 		DPRINTF(1, "Client event = 0x%p\n", client->control.event);
-	} else {
-		evt = CreateEvent(NULL, FALSE, TRUE, NULL);	
-		if (!evt) {
-			MYERROR("CreateEvent error\n");
-			return (-1);
-		}
-		DPRINTF(1, "Pipe event = 0x%x\n", (unsigned int ) evt);
-		ZeroMemory(&client->control.aio, sizeof(OVERLAPPED));
-		client->control.aio.hEvent = evt;
-		client->control.event = NULL;
-		client->control.io_pending = 0;
 	}
 #endif
 	client->session_id = session_id;
 	client->fd_ro = fd_ro;
 	client->fd_wo = fd_wo;
-	client->pid = pid;
 	client->control.data_pending = 0;
 	client->control.nop_pending = 0;
 	client->num_seq = 0;
 	client->saved_queue = 0;
-	if (! (client->queue = init_queue()))
+	if (!(client->queue = init_queue()))
 		return (-1);
 	client->saved_queue = client->queue;
+	return (0);
+}
+
+/**
+ * @brief create a new client with pre-defined session id. 
+		  Used in remote port forwarding case when connection comes from server.
+ * @param[in] conf configuration
+ * @param[in] fd_ro read file descriptor
+ * @param[in] fd_wo write file descriptor (may be same as fd_ro)
+ * @param[in] session_id id received from server
+ * @retval 0 on success
+ * @retval -1 on error
+ */
+int		add_rpf_client(t_conf *conf, socket_t fd_ro,
+	socket_t fd_wo, uint16_t session_id)
+{
+	t_simple_list	*client;
+	static t_request	req;
+	t_list		*queue;
+#ifdef _WIN32
+	HANDLE	evt;
+#endif
+
+	DPRINTF(1, "Adding rpf client: 0x%hx\n", session_id);
+
+	// Unnecessary because there must be at least 1 client in rpf case
+	if (!(conf->client))
+	{
+		if (!(conf->client = list_create_simple_cell()))
+			return (-1);
+		client = conf->client;
+	}
+	else
+	{
+		client = conf->client;
+		while (client->next)
+			client = client->next;
+		if (!(client->next = list_create_simple_cell()))
+			return (-1);
+		client = client->next;
+	}
+
+#ifdef _WIN32
+	if (socket_is_valid(fd_ro))
+	{
+		if ((!((client->control.event = WSACreateEvent())))
+			|| (WSAEventSelect(fd_ro, client->control.event, FD_READ | FD_ACCEPT | FD_CLOSE) == SOCKET_ERROR))
+		{
+			MYERROR("WSAEvent error\n");
+			return (-1);
+		}
+		DPRINTF(1, "Client event = 0x%p\n", client->control.event);
+	}
+#endif
+	client->session_id = session_id;
+	client->fd_ro = fd_ro;
+	client->fd_wo = fd_wo;
+	client->control.data_pending = 0;
+	client->control.nop_pending = 0;
+	client->num_seq = 0;
+	client->saved_queue = 0;
+	if (!(client->queue = init_queue()))
+		return (-1);
+	client->saved_queue = client->queue;
+
+	// If didnt connect send DESAUTH
+	queue = queue_find_empty_data_cell(client);
+	if (fd_ro == -1 && queue)
+	{
+		DPRINTF(1, "Sending DESAUTH for RPF client 0x%x because could not to establish connection\n", client->session_id);
+		// dont know why i should set num_seq explicitly
+		client->num_seq = 1;
+		req.len = -1;
+		push_req_data(conf, client, queue, &req);
+		queue_send(conf, client, queue);
+		delete_client(conf, client);
+	}
+
 	return (0);
 }
 
@@ -275,34 +343,30 @@ static int	check_incoming_client_data(t_conf *conf, t_fd_event *descriptors, int
 static int	check_incoming_client(t_conf *conf, t_fd_event *descriptors, int offset)
 {   
   /* New client */
-	if (!(conf->use_stdin))
-    {
-		if (socket_is_valid(conf->sd) 
-		&& (IS_THIS_SOCKET(conf->sd, conf->event_tcpsd, descriptors, offset)))
-		{
-			if ((conf->sd_tcp = accept(conf->sd, 0, 0)) == -1)
-			{
-				MYERROR("accept");
-				close(conf->sd_tcp);
-				conf->sd_tcp = -1;
-				return (-1);
-			}
-#ifdef _WIN32
-			ResetEvent(conf->event_tcpsd);
-#endif
-			if (add_client(conf, conf->sd_tcp, conf->sd_tcp, (process_t)-1))
-			{
-				close(conf->sd_tcp);
-				conf->sd_tcp = -1;
-				return (-1);
-			}
+	socket_t sock = -1;
 
-			// Accept only 1 client
-			close(conf->sd);
-			conf->sd = -1;
-			return (0);
+	if (socket_is_valid(conf->sd) 
+	&& (IS_THIS_SOCKET(conf->sd, conf->event_tcpsd, descriptors, offset)))
+	{
+		if ((sock = accept(conf->sd, 0, 0)) == -1)
+		{
+			MYERROR("accept");
+			close(sock);
+			sock = -1;
+			return (-1);
 		}
-    }
+#ifdef _WIN32
+		ResetEvent(conf->event_tcpsd);
+#endif
+		if (add_client(conf, sock, sock))
+		{
+			MYERROR("add_client");
+			close(sock);
+			sock = -1;
+			return (-1);
+		}
+		return (0);
+	}
 	return (1);
 }
 
@@ -356,27 +420,6 @@ static int	get_socket_data(t_conf *conf, t_fd_event *descriptors, int offset)
 }
 
 
-/**
- * @brief main client loop (wait & process data)
- * @param[in] conf configuration
- * @retval -1 on error
- * @retval 0 when finished
- */	
-int			check_child(t_conf *conf)
-{
-#ifndef _WIN32
-  int			status;
-
-  if (waitpid(-1, &status, WNOHANG) > 0)
-    {
-      DPRINTF(1, "Child finished\n");
-      delete_all_client(conf);
-      return (1);
-    }
-#endif
-  return (0);
-}
-
 #ifndef _WIN32
 int	unix_check_for_data(t_conf *conf, fd_set *rfds, int max_fd, struct timeval *tv)
 {
@@ -403,25 +446,25 @@ int	unix_check_for_data(t_conf *conf, fd_set *rfds, int max_fd, struct timeval *
 
 int		win_check_for_data(t_conf *conf, WSAEVENT *descriptors, int max_fd, struct timeval *tv)
 {
-  DWORD		retval;
+	DWORD		retval;
   
-  retval = WaitForMultipleObjects(max_fd, descriptors, FALSE, tv->tv_sec * 1000);
-  if (retval == WAIT_FAILED)
+	retval = WaitForMultipleObjects(max_fd, descriptors, FALSE, tv->tv_sec * 1000);
+	if (retval == WAIT_FAILED)
     {
-      DPRINTF(1, "WaitForMultipleObjects error (%li)\n", GetLastError());
-      return (-1);
+		DPRINTF(1, "WaitForMultipleObjects error (%li)\n", GetLastError());
+		return (-1);
     }
-  if ((retval != WAIT_TIMEOUT) && (retval >= WAIT_OBJECT_0))
+	if ((retval != WAIT_TIMEOUT) && (retval >= WAIT_OBJECT_0))
     {
-      if ((get_socket_data(conf, descriptors, (int)(retval - WAIT_OBJECT_0))) 
-	  && (!conf->local_port) && (!conf->remote_port))
-	{
-	  DPRINTF(1, "Exiting ..\n");
-	  delete_all_client(conf);
-	  return (-1);
-	}
+		if ((get_socket_data(conf, descriptors, (int)(retval - WAIT_OBJECT_0))) 
+		&& (!conf->local_port) && (!conf->remote_port))
+		{
+			DPRINTF(1, "Exiting ..\n");
+			delete_all_client(conf);
+			return (-1);
+		}
     }
-  return (0);
+	return (0);
 }
 
 #endif
@@ -446,38 +489,38 @@ int			do_client(t_conf *conf)
     if (debug >= 2)
         fprintf(stderr, "When connected press enter at any time to dump the queue\n");
 
-    while (1)
+    // Bind to local port at the beginning
+    if (conf->is_local_port_forwarding && bind_socket(conf))
     {
-        // Either didnt start listening or incoming client closed connection
-        // So start listening again!
-        if (conf->is_local_port_forwarding && conf->sd == -1 && conf->sd_tcp == -1
-            && bind_socket(conf))
-        {
-            DPRINTF(1, "conf->sd_tcp == -1 and conf->sd == -1. Starting listening\n");
-            close(conf->sd_tcp);
-            conf->sd_tcp = -1;
-            close(conf->sd);
-            conf->sd = -1;
-            return (-1);
-        }
+        DPRINTF(1, "Error while binding to port\n");
+        close(conf->sd);
+        conf->sd = -1;
+        return (-1);
+    }
 
-        if (!conf->is_local_port_forwarding && conf->sd_tcp == -1)
-        {
-            DPRINTF(1, "conf->sd_tcp == -1. Reconnecting\n");
-            if (connect_socket(conf) || add_client(conf, conf->sd_tcp, conf->sd_tcp, (process_t)-1))
-            {
-                close(conf->sd_tcp);
-                conf->sd_tcp = -1;
-                return (-1);
-            }
-        }
+	// Make pseudoclient that will handle new connections from the remote side
+    if (!conf->is_local_port_forwarding && add_client(conf, -1, -1))
+    {
+		DPRINTF(1, "Error while creating pseudoclient for remote port forwarding\n");
+        return (-1);
+    }
+
+	while (1)
+	{
+		if (
+			(!conf->is_local_port_forwarding && !conf->client) ||
+			(conf->is_local_port_forwarding && !socket_is_valid(conf->sd))
+			)
+		{
+			DPRINTF(1, "No more clients. Exiting.\n");
+			return (0);
+		}
+		//DPRINTF(1, "In do_client loop\n");
 #ifdef _WIN32
         max_fd = prepare_select(conf, rfds, &tv);
-        if (win_check_for_data(conf, rfds, max_fd, &tv))
+		if (win_check_for_data(conf, rfds, max_fd, &tv))
+			return (-1);
 #else
-        /* Check for defunc child */
-        if (check_child(conf))
-            return (0);
         max_fd = prepare_select(conf, &rfds, &tv);
         if (unix_check_for_data(conf, &rfds, max_fd, &tv))
             return (-1);

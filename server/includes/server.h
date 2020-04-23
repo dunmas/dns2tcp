@@ -38,11 +38,12 @@
 /* 
    QUEUE_SIZE must the same that server value 
 */
-#define QUEUE_SIZE      48
+#define QUEUE_SIZE      256
 
 
 typedef struct		s_conf {
   struct s_simple_list	*client;
+  struct s_bind_list	*bind_listener;
   int			sd_udp;
   char			*my_domain;
   char			*chroot;

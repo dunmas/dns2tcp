@@ -26,6 +26,8 @@ int	delete_queue(t_list *queue);
 int	queue_get_udp_data(t_conf *conf, char *buffer, int len);
 int	queue_get_tcp_data(t_conf *conf, struct s_simple_list *client);
 int	check_for_resent(t_conf *conf);
+t_list          *queue_find_empty_data_cell(t_simple_list *client);
+int			queue_send(t_conf *conf, t_simple_list *client, t_list *queue);
 int	queue_put_nop(t_conf *conf, struct s_simple_list *client);
 void	queue_dump(struct s_simple_list *client);
 

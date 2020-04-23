@@ -42,14 +42,14 @@
 #ifdef _WIN32
 int		add_event(WSAEVENT event, HANDLE *rfds, int max_fd)
 {
-  rfds[max_fd] = event;
-  return ((int) (max_fd+1));
+	rfds[max_fd] = event;
+	return ((int) (max_fd+1));
 }
 #else
 int		add_socket(socket_t socket, fd_set *rfds, socket_t max_fd)
 {
-  FD_SET(socket, rfds);
-  return ((int)(MAX(max_fd, socket)));
+	FD_SET(socket, rfds);
+	return ((int)(MAX(max_fd, socket)));
 }
 #endif
 
@@ -64,6 +64,9 @@ int		win_prepare_select(t_conf *conf, WSAEVENT *rfds, struct timeval *tv)
   
 	for (client = conf->client; client; client = client->next)
     {
+		if (!socket_is_valid(client->fd_ro) && !conf->is_local_port_forwarding)
+			queue_put_nop(conf, client);
+
 		if (socket_is_valid(client->fd_ro))
 		{
 			queue_put_nop(conf, client);
@@ -104,6 +107,9 @@ int		unix_prepare_select(t_conf *conf, fd_set *rfds, struct timeval *tv)
     FD_ZERO(rfds);
     for (client = conf->client; client; client = client->next)
     {
+        if (!socket_is_valid(client->fd_ro) && !conf->is_local_port_forwarding)
+            queue_put_nop(conf, client);
+
         if (socket_is_valid(client->fd_ro))
         {
             queue_put_nop(conf, client);
@@ -140,8 +146,8 @@ int		unix_prepare_select(t_conf *conf, fd_set *rfds, struct timeval *tv)
 int	prepare_select(t_conf *conf, fd_set *rfds, struct timeval *tv)
 {
 #ifndef _WIN32
-  return (unix_prepare_select(conf, rfds, tv));
+	return (unix_prepare_select(conf, rfds, tv));
 #else
-  return (win_prepare_select(conf, (WSAEVENT *)rfds, tv));
+	return (win_prepare_select(conf, (WSAEVENT *)rfds, tv));
 #endif
 }

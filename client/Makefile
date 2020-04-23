@@ -49,7 +49,7 @@ am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_dns2tcpc_OBJECTS = hmac_sha1.$(OBJEXT) select.$(OBJEXT) \
 	crc16.$(OBJEXT) rr.$(OBJEXT) mycrypto.$(OBJEXT) \
-	command.$(OBJEXT) session.$(OBJEXT) config.$(OBJEXT) \
+	session.$(OBJEXT) config.$(OBJEXT) \
 	queue.$(OBJEXT) client.$(OBJEXT) list.$(OBJEXT) \
 	myrand.$(OBJEXT) auth.$(OBJEXT) dns.$(OBJEXT) \
 	mystrnlen.$(OBJEXT) requests.$(OBJEXT) memdump.$(OBJEXT) \
@@ -175,7 +175,6 @@ dns2tcpc_SOURCES = \
 			../common/crc16.c	\
 			rr.c			\
 			../common/mycrypto.c	\
-			command.c		\
 			session.c		\
 			../common/config.c	\
 			queue.c			\
@@ -278,7 +277,6 @@ include ./$(DEPDIR)/auth.Po
 include ./$(DEPDIR)/base64.Po
 include ./$(DEPDIR)/base32.Po
 include ./$(DEPDIR)/client.Po
-include ./$(DEPDIR)/command.Po
 include ./$(DEPDIR)/config.Po
 include ./$(DEPDIR)/crc16.Po
 include ./$(DEPDIR)/dns.Po
