@@ -151,7 +151,7 @@ static void encode_sequence(const unsigned char *plain, int len, unsigned char *
 	}
 }
 
-int base32_encode(char *plain, char *coded, int len)
+int base32_encode(unsigned char *plain, unsigned char *coded, int len)
 {
 	// All the hard work is done in encode_sequence(),
 	// here we just need to feed it the data sequence by sequence.
@@ -183,7 +183,7 @@ static int decode_sequence(const unsigned char *coded, unsigned char *plain)
 	return 5;
 }
 
-int base32_decode(char *plain, char *coded)
+int base32_decode(unsigned char *plain, unsigned char *coded)
 {
 	int written = 0;
 	for (int i = 0, j = 0; ; i += 8, j += 5) {

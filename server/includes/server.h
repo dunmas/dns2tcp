@@ -38,7 +38,7 @@
 /* 
    QUEUE_SIZE must the same that server value 
 */
-#define QUEUE_SIZE      256
+#define QUEUE_SIZE      128
 
 
 typedef struct		s_conf {

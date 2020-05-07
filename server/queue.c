@@ -28,6 +28,7 @@
 #include "mycrypto.h"
 #include "base32.h"
 #include "server.h"
+#include "session.h"
 #include "dns.h"
 #include "dns_decode.h"
 #include "packet.h"
@@ -102,15 +103,22 @@ void			queue_update_timer(t_list *queue)
 
 static int	queue_mark_received(t_list *queue, uint16_t seq)
 {
-  if (seq)
+    DPRINTF(3, "[queue_mark_received] seq = %d\n", seq);
+    if (seq)
     {
-      while ((queue) && (queue->info.num_seq != seq))
-	queue = queue->next;
-      if (!queue)
-	return (0);
-      queue->status = (queue->status == FREE) ? FREE : RECEIVED;
+        while ((queue) && (queue->info.num_seq != seq))
+            queue = queue->next;
+        if (!queue)
+            return (0);
+        DPRINTF(3, "[queue_mark_received] queue->status = %d   was {seq=%d:stat=%s}\n", queue->status, queue->info.num_seq, 
+        (queue->status == 0) ? "F" : (queue->status == USED ) ? "U" : (queue->status == RECEIVED ) ? "R" : "S" );
+        
+        queue->status = (queue->status == FREE) ? FREE : RECEIVED;
+        
+        DPRINTF(3, "[queue_mark_received] queue->status = %d   became {seq=%d:stat=%s}\n", queue->status, queue->info.num_seq, 
+        (queue->status == 0) ? "F" : (queue->status == USED ) ? "U" : (queue->status == RECEIVED ) ? "R" : "S" );
     }
-  return (0);
+    return (0);
 }
 
 /**
@@ -182,13 +190,11 @@ static int		queue_send_data(t_conf *conf, t_list *queue)
 static void		queue_reply(t_conf *conf, t_simple_list *client, 
 				    t_list *queue, void *data, int data_len)
 {
-  struct dns_hdr	*hdr;
   t_packet		*packet;
   char			buffer[MAX_EDNS_LEN - DNS_HDR_SIZE - REQ_HDR_SIZE ];
   t_data		output_data;
   t_request		req;
 
-  hdr = (struct dns_hdr *) queue->data;
   req.data = queue->data;
   req.len = queue->len;
   req.reply_functions = queue->peer.reply_functions;
@@ -237,7 +243,7 @@ static int		queue_flush_incoming_data(t_simple_list *client)
 	    {
 	        if (write(client->sd_tcp, queue->peer.data, queue->peer.len) != queue->peer.len)
 	            return (-1);
-	        DPRINTF(2, "Flush Write %d bytes, crc = 0x%x \n", queue->peer.len, 
+	        DPRINTF(1, "Flush Write %d bytes, crc = 0x%x \n", queue->peer.len, 
 	  	      crc16((const char*) queue->peer.data, queue->peer.len));
 	        queue->peer.len = 0;
 	    }
@@ -259,7 +265,7 @@ static int	queue_change_root(t_simple_list *client)
 	t_list	*new_root;
 	t_list	*prev;
 
-
+    DPRINTF(3, "[queue_change_root]\n");
 	if (client->queue->status != RECEIVED)
 		return (0);
 	prev = client->queue;
@@ -324,7 +330,7 @@ int			queue_flush_expired_data(t_conf *conf)
 	struct timezone	tz;
 	struct dns_hdr	*hdr;
 
-	//DPRINTF(3, "Flushing expired request\n");
+    //DPRINTF(3, "Flushing expired request\n");
 	if (gettimeofday(&tv, &tz))
 		return (-1);
 	for (client = conf->client; client; client = client->next)
@@ -377,53 +383,57 @@ int			queue_flush_expired_data(t_conf *conf)
 static int		queue_deal_incoming_data(t_conf *conf, t_simple_list *client, t_list *queue,
 					 t_packet *packet, int len)
 {
-  int			res = 0;
-  int			diff = 0;
-  struct dns_hdr	*hdr;
+    int			res = 0;
+    int			diff = 0;
+    struct dns_hdr	*hdr;
     
-  if ((packet->ack_seq) && (queue_mark_received(client->queue, packet->ack_seq)))
-    return (-1);
-  if (queue)
+    if ((packet->ack_seq) && (queue_mark_received(client->queue, packet->ack_seq)))
+        return (-1);
+    if (queue)
     {
-      DPRINTF(2, "[queue_deal_incoming_data] queue->status is %d\n", queue->status);
-      hdr = (void *)queue->data;
-      switch (queue->status) 
-	{
-	case USED: 
-	  DPRINTF(3, "USED, sending reply for id 0x%x\n", ntohs(hdr->id));
-	  queue_reply(conf, client, queue, 0, 0);
-	  client->control.req--;
-	  break;
-	case SENT:
-	  res = queue_send_data(conf, queue);
-	  DPRINTF(3, "SENT received same req again, sending id 0x%x\n", ntohs(hdr->id));
-	  break;
-	case RECEIVED:
-	  DPRINTF(3, "RECEIVED received same req again, sending id 0x%x\n", ntohs(hdr->id));
-	  queue_reply(conf, client, queue, 0, 0);
-	  /* FIXME req-- ?? */
-	  client->control.req--;
-	  res = queue_send_data(conf, queue);
-	  break;
-	case FREE:
-	  DPRINTF(3, "Queue : dealing packet %d\n", packet->seq);
-	  res = queue_copy_data(client, queue, packet, len);
-	  /* Now mark as USED */
-	  if (queue_flush_incoming_data(client) < 0)
-	    return (-1);
-	  if (client->queue->status == RECEIVED)
-	    queue_change_root(client);	      
-	  break;
-	}
-      if (client->num_seq > packet->seq) /*  seq must not be 0 */
-	diff = ((MAX_SEQ - client->num_seq) + packet->seq ); 
-      else
-	diff = packet->seq - client->num_seq ;
-      if (diff > FLUSH_TRIGGER)
-	queue_flush_outgoing_data(conf, client, diff/2);
-      return (res);
+        DPRINTF(2, "[queue_deal_incoming_data] queue->status is %d\n", queue->status);
+        hdr = (void *)queue->data;
+        switch (queue->status) 
+        {
+        case USED: // 1
+            DPRINTF(3, "USED, sending reply for id 0x%x\n", ntohs(hdr->id));
+            queue_reply(conf, client, queue, 0, 0);
+            client->control.req--;
+            break;
+        case SENT: // 3
+            res = queue_send_data(conf, queue);
+            DPRINTF(3, "SENT received same req again, sending id 0x%x\n", ntohs(hdr->id));
+            break;
+        case RECEIVED: // 2
+            DPRINTF(3, "    0x%x\n", ntohs(hdr->id));
+            queue_reply(conf, client, queue, 0, 0);
+            /* FIXME req-- ?? */
+            client->control.req--;
+            res = queue_send_data(conf, queue);
+            // will this bugfix work? R should never turn to S again
+            queue->status = RECEIVED;
+            break;
+        case FREE: // 0
+            DPRINTF(3, "Queue : dealing packet %d\n", packet->seq);
+            res = queue_copy_data(client, queue, packet, len);
+            /* Now mark as USED */
+            if (queue_flush_incoming_data(client) < 0)
+                return (-1);
+            if (client->queue->status == RECEIVED)
+                queue_change_root(client);	      
+            break;
+        }
+        if (client->num_seq > packet->seq) /*  seq must not be 0 */
+            diff = ((MAX_SEQ - client->num_seq) + packet->seq ); 
+        else
+            diff = packet->seq - client->num_seq ;
+        
+        if (diff > FLUSH_TRIGGER)
+            queue_flush_outgoing_data(conf, client, diff/2);
+        
+        return (res);
     }
-  return (-1);
+    return (-1);
 }
 
 
@@ -531,20 +541,20 @@ int			queue_put_sessionid(t_conf *conf, t_simple_list *client)
 
 void		queue_dump(t_simple_list *client)
 {
-  t_list	*queue;
+    t_list	*queue;
 
-  while (client)
+    while (client)
     {
-      queue = client->queue;
-      printf("client 0x%x\n", client->session_id);
-      while (queue)
-	{
-	  printf("{seq=%d:stat=%s} ", queue->info.num_seq, 
-		 (queue->status == 0) ? "F" : (queue->status == USED )? "U" :"S" );
-	  queue = queue->next;
-	}
-      printf("\n");
-      client = client->next;
+        queue = client->queue;
+        printf("client 0x%x\n", client->session_id);
+        while (queue)
+        {
+            printf("{seq=%d:stat=%s} ", queue->info.num_seq, 
+                (queue->status == 0) ? "F" : (queue->status == USED )? "U" : (queue->status == RECEIVED )? "R" : "S" );
+            queue = queue->next;
+        }
+        printf("\n");
+        client = client->next;
     }
 }
 
@@ -697,7 +707,7 @@ int		queue_put_data(t_conf *conf, t_request *req, t_data *decoded_data)
     seq_tmp = GET_16(&(packet->seq)) ; packet->seq = seq_tmp;
     seq_tmp = GET_16(&(packet->ack_seq)) ; packet->ack_seq = seq_tmp;
     
-    DPRINTF(2, "Packet [%d] decoded, data_len %d\n", packet->seq, decoded_data->len - (int)PACKET_LEN);
+    DPRINTF(2, "Packet [seq %d ack %d] decoded, data_len %d\n", packet->seq, packet->ack_seq, decoded_data->len - (int)PACKET_LEN);
     if ((client = find_client_by_session_id(conf, packet->session_id)))
     { 
         if (client->sd_tcp < 0 && client->is_local_port_forwarding)
@@ -717,6 +727,7 @@ int		queue_put_data(t_conf *conf, t_request *req, t_data *decoded_data)
         if ((queue = get_cell_in_queue(queue, diff)))
 	    {
 	        queue_copy_query(req, queue, packet->seq);
+            DPRINTF(1, "GOT %d BYTES\n", decoded_data->len);
 	        if (queue_deal_incoming_data(conf, client, queue, packet, decoded_data->len))
 	        {
                 if (client->sd != -1)

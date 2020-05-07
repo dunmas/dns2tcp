@@ -33,8 +33,8 @@
 #define DECODED_BASE32_SIZE(len)  (((len)/8)*5)
 
 
-extern int base32_encode(char *plain, char *coded, int len);
-extern int base32_decode(char *plain, char *coded);
+extern int base32_encode(unsigned char *plain, unsigned char *coded, int len);
+extern int base32_decode(unsigned char *plain, unsigned char *coded);
 
 #ifndef HAVE_STRCASESTR
 extern char *strcasestr(const char *, const char *);

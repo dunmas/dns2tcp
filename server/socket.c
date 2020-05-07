@@ -142,11 +142,7 @@ static int	set_nonblock(socket_t sd)
 
 int			bind_socket_tcp(uint16_t port, int *sd)
 {
-  int ret;
   int  optval;
-  char *host, *end;
-  struct sockaddr_storage ss;
-  struct addrinfo *res, *ptr;
   struct sockaddr_in addr;
 
 

@@ -33,5 +33,7 @@ union	sockaddr_u			{
 
 int connect_socket(in_addr_t address, uint16_t port, int *sd);
 int bind_socket(t_conf *);
+int	bind_socket_tcp(uint16_t port, int *sd);
+int	bind_socket_dns(t_conf *conf);
 
 #endif

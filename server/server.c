@@ -22,6 +22,7 @@
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+#include <stdbool.h>
 #include <time.h>
 #include <string.h>
 
@@ -162,6 +163,7 @@ int			do_server(t_conf *conf)
     t_simple_list		*tmp;
     struct timeval	tv;
     struct timezone	tz;
+    bool has_red_udp = false;
 
 #ifdef DEBUG
     char		        buffer[MINI_BUFF];
@@ -196,12 +198,15 @@ int			do_server(t_conf *conf)
 	        continue;
 	    }
 #endif
-        if (FD_ISSET(conf->sd_udp, &rfds))
+        if (!has_red_udp && FD_ISSET(conf->sd_udp, &rfds))
         {
+            has_red_udp = true;
+            DPRINTF(2, "READING DNS\n");
 	        get_incoming_request(conf);
         }
         else
 	    {
+            has_red_udp = false;
             for (client = conf->client;  client; client = tmp)
             {
                 tmp = client->next;
@@ -209,12 +214,14 @@ int			do_server(t_conf *conf)
                 {
                     if (queue_read_tcp(conf, client))
                     {
+                        DPRINTF(2, "READING TCP\n");
                         if (client->sd_tcp != -1)
                         {
                             close(client->sd_tcp);
                             client->sd_tcp = -1;
                         }
                         delete_client(conf, client);
+                        continue;
                     }
                 }
                 // remote port forwarding listener
@@ -228,6 +235,7 @@ int			do_server(t_conf *conf)
                             client->sd = -1;
                         }
                         delete_client(conf, client);
+                        continue;
                     }   
                 }
             }

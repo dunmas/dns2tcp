@@ -87,7 +87,7 @@ static uint16_t		get_type_request(t_request *req)
 
 int			get_request(t_conf *conf, t_request *req, t_data *output)
 {
-  char			buffer[MAX_HOST_NAME_ENCODED + 1];
+  unsigned char			buffer[MAX_HOST_NAME_ENCODED + 1];
   int			len;
   char			*query;
   struct dns_hdr	*hdr;
@@ -105,12 +105,12 @@ int			get_request(t_conf *conf, t_request *req, t_data *output)
       DPRINTF(2, "Request too long\n");
       return (-1);
     }
-  if (dns_decode(conf, req, query, buffer) == -1)
+  if (dns_decode(conf, req, query, (char*) buffer) == -1)
     {
       DPRINTF(2, "DNS decode error\n");
       return (-1);
     }
-  DPRINTF(3, "Receive query : %s dns_id = 0x%x for domain %s\n", buffer, ntohs(hdr->id), req->domain);
+  DPRINTF(1, "Receive query : %s dns_id = 0x%x for domain %s\n", buffer, ntohs(hdr->id), req->domain);
   return ((output->len = base32_decode((unsigned char *)output->buffer, buffer)));
 }
 
@@ -127,7 +127,7 @@ int			get_request(t_conf *conf, t_request *req, t_data *output)
 
 int			send_reply(t_conf *conf, t_request *req, t_data *data)
 {
-  char			buffer[MAX_EDNS_LEN];
+  unsigned char			buffer[MAX_EDNS_LEN];
   void			*where;
   struct dns_hdr	*hdr;
   t_packet		*packet;
@@ -144,11 +144,11 @@ int			send_reply(t_conf *conf, t_request *req, t_data *data)
 
   packet = (t_packet *)data->buffer;
   packet_id = ntohs(packet->seq);
-  base32_encode(data->buffer, buffer, data->len);
-  where = req->reply_functions->rr_add_reply(conf, req, hdr, where, buffer);
+  base32_encode((unsigned char*) data->buffer, buffer, data->len);
+  where = req->reply_functions->rr_add_reply(conf, req, hdr, where, (char*) buffer);
   /* update request len */
   req->len = where - (void *)req->data;
-  DPRINTF(3, "Sending [%d] len = %d dns id = 0x%x %s\n", packet_id, req->len, ntohs(hdr->id), buffer);
+  DPRINTF(1, "Sending [%d] len = %d dns id = 0x%x %s\n", packet_id, req->len, ntohs(hdr->id), buffer);
   if ((sendto(conf->sd_udp, req->data, req->len, 
 	      0, (struct sockaddr *)&req->sa, sizeof(struct sockaddr))) != req->len)
     {

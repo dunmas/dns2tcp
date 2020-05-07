@@ -22,6 +22,7 @@
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #include "mycrypto.h"
@@ -50,7 +51,6 @@
 
 static int		connect_resource(t_conf *conf, t_request *req, t_packet *packet, t_simple_list *client, int *sd)
 {
-    t_list		*list_resource;
     char		*resource, *tmp;
     int			len;
   
@@ -107,12 +107,10 @@ static int		connect_resource(t_conf *conf, t_request *req, t_packet *packet, t_s
 int			bind_user(t_conf *conf, t_request *req, t_packet *packet, t_simple_list *client)
 {
     int			    sd;
-    char			*resource;
     char			*compress;
 
     if (connect_resource(conf, req, packet, client, &sd))
         return (-1);
-    resource = ((char *)packet) + PACKET_LEN;
     client_update_timer(client);
     if (!(compress = jump_end_query(req, 
 				   GET_16(&(((struct dns_hdr *)req->data)->qdcount)), req->len)))

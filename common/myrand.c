@@ -33,6 +33,8 @@
 #include "mywin32.h"
 #endif
 
+#include <stdlib.h>
+
 
 uint16_t		myrand()
 {
