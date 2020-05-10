@@ -42,73 +42,62 @@
 
 int				bind_socket_dns(t_conf *conf)
 {
-  int				ret;
-  union sockaddr_u		su;
-  struct addrinfo		*res, hints;
-  socklen_t			slen;
+    int				ret;
+    union sockaddr_u		su;
+    struct addrinfo		*res, hints;
+    socklen_t			slen;
 
-  memset(&su, 0, sizeof(su));
+    memset(&su, 0, sizeof(su));
 
-  slen = sizeof(struct sockaddr_in);
-  if (conf->my_ip)
+    slen = sizeof(struct sockaddr_in);
+    if (conf->my_ip)
     {
-      DPRINTF(1, "Listening on %s:%d for domain %s\n", conf->my_ip, 
-	      conf->port, conf->my_domain);
-      memset(&hints, 0, sizeof(hints));
-      hints.ai_flags    = AI_CANONNAME;
-      hints.ai_family   = PF_UNSPEC;
-      hints.ai_socktype = SOCK_DGRAM;
-      res = NULL;
-      if ((ret = getaddrinfo(conf->my_ip, NULL, &hints, &res)) || !res)
+        DPRINTF(1, "Listening on %s:%d for domain %s\n", conf->my_ip, 
+            conf->port, conf->my_domain);
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_flags    = AI_CANONNAME;
+        hints.ai_family   = PF_UNSPEC;
+        hints.ai_socktype = SOCK_DGRAM;
+        res = NULL;
+        if ((ret = getaddrinfo(conf->my_ip, NULL, &hints, &res)) || !res)
         {
-          MYERROR("getaddrinfo: %s\n", gai_strerror(ret));
-          return (-1);
+            MYERROR("getaddrinfo: %s\n", gai_strerror(ret));
+            return (-1);
         }
-      switch (res->ai_family) {
-        case AF_INET:
-          memcpy(&su.in.sin_addr,
-		 &((struct sockaddr_in *) res->ai_addr)->sin_addr,
-		 sizeof(struct in_addr));
-	  su.in.sin_port = htons(conf->port);
-	  su.in.sin_family = res->ai_family;
-	  break;
-	  /* Not supported
-	case AF_INET6:
-	  memcpy(&su.in6.sin6_addr,
-	         &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr,
-		 sizeof(struct in6_addr));
-	  su.in6.sin6_port = htons(conf->port);
-	  su.in6.sin6_family = res->ai_family;
-          slen = sizeof(struct sockaddr_in6);
-	  break;
-	  */
-
-	default:
-          freeaddrinfo(res);
-	  return (-1);
-      }
-      freeaddrinfo(res);
+        switch (res->ai_family) {
+            case AF_INET:
+                memcpy(&su.in.sin_addr,
+                    &((struct sockaddr_in *) res->ai_addr)->sin_addr,
+                    sizeof(struct in_addr));
+                su.in.sin_port = htons(conf->port);
+                su.in.sin_family = res->ai_family;
+                break;
+            default:
+                freeaddrinfo(res);
+                return (-1);
+        }
+        freeaddrinfo(res);
     }
-  else
+    else
     {
-      su.in.sin_family = AF_INET;
-      su.in.sin_addr.s_addr = INADDR_ANY;
-      su.in.sin_port = htons(conf->port);
-      DPRINTF(1, "Listening on 0.0.0.0:%d for domain %s\n", conf->port, 
-	      conf->my_domain);
+        su.in.sin_family = AF_INET;
+        su.in.sin_addr.s_addr = INADDR_ANY;
+        su.in.sin_port = htons(conf->port);
+        DPRINTF(1, "Listening on 0.0.0.0:%d for domain %s\n", conf->port, 
+            conf->my_domain);
     }
-  if ((conf->sd_udp = socket(su.in.sin_family, SOCK_DGRAM, 0)) < 0)
+    if ((conf->sd_udp = socket(su.in.sin_family, SOCK_DGRAM, 0)) < 0)
     {
-      MYERROR("socket error");
-      return (-1);
+        MYERROR("socket error");
+        return (-1);
     }
-  if (bind(conf->sd_udp, &su.sockaddr, slen) < 0)
+    if (bind(conf->sd_udp, &su.sockaddr, slen) < 0)
     {
-      close(conf->sd_udp);
-      MYERROR("bind error");
-      return (-1);
+        close(conf->sd_udp);
+        MYERROR("bind error");
+        return (-1);
     }
-  return (0);      
+    return (0);      
 }
 
 
@@ -122,14 +111,14 @@ int				bind_socket_dns(t_conf *conf)
 static int	set_nonblock(socket_t sd)
 {
 #ifndef _WIN32
-  int		opt;
+    int		opt;
 
-  if ((opt = fcntl(sd, F_GETFL)) == -1)
-    return (-1);
-  if ((opt = fcntl(sd, F_SETFL, opt|O_NONBLOCK)) == -1)
-    return (-1);
+    if ((opt = fcntl(sd, F_GETFL)) == -1)
+        return (-1);
+    if ((opt = fcntl(sd, F_SETFL, opt|O_NONBLOCK)) == -1)
+        return (-1);
 #endif
-  return (0);
+    return (0);
 }
 
 
@@ -142,34 +131,35 @@ static int	set_nonblock(socket_t sd)
 
 int			bind_socket_tcp(uint16_t port, int *sd)
 {
-  int  optval;
-  struct sockaddr_in addr;
+    int  optval;
+    struct sockaddr_in addr;
 
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(port);
-  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-  if ((*sd = socket(PF_INET, SOCK_STREAM, 0)) < 0)
-  {
-    MYERROR("socket error %hd", port);
-    return (-1);
-  }
-  if (!setsockopt(*sd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))
-  {
-    if (bind(*sd, (struct sockaddr *) &addr, sizeof(addr)) < 0)
-	{
-  	  perror("bind error");
-	  return (-1);
-	}
-    if ((!set_nonblock(*sd)) && (!listen(*sd, 10)))
-	{
-	  fprintf(stderr, "Listening on port : %d\n", port);
-	  return (0);
-	}
-  }
-  MYERROR("Socket_error");
-  return (-1);      
+    if ((*sd = socket(PF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        MYERROR("socket error %hd", port);
+        return (-1);
+    }
+    if (!setsockopt(*sd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)))
+    {
+        if (bind(*sd, (struct sockaddr *) &addr, sizeof(addr)) < 0)
+        {
+            perror("bind error");
+            close(*sd);
+            return (-1);
+        }
+        if ((!set_nonblock(*sd)) && (!listen(*sd, 10)))
+        {
+            fprintf(stderr, "Listening on port : %d\n", port);
+            return (0);
+        }
+    }
+    MYERROR("Socket_error");
+    close(*sd);
+    return (-1);      
 }
 
 
@@ -191,6 +181,7 @@ int			connect_socket(in_addr_t address, uint16_t port, int *sd)
 	if (connect(*sd, (struct sockaddr *) &sa, sizeof(struct sockaddr_in)) < 0)
 	{
 		perror("socket connect error");
+        close(*sd);
 		return (-1);
 	}
 	if (!set_nonblock(*sd))
