@@ -46,24 +46,23 @@
 
 int			main(int argc, char **argv)
 {
-  t_conf		conf;
+    t_conf		conf;
   
-  if ((get_option(argc, argv, &conf)) ||  
-      ((conf.sd_udp = create_socket(&conf)) == -1))
-    return (-1);
-  srand(getpid() ^ (unsigned int) time(0));
+    if ((get_option(argc, argv, &conf)) || ((conf.sd_udp = create_socket(&conf)) == -1))
+        return (-1);
+    srand(getpid() ^ (unsigned int) time(0));
 
 #ifdef _WIN32
-  if (!(conf.event_udp = WSACreateEvent()))
+    if (!(conf.event_udp = WSACreateEvent()))
     {
-      MYERROR("WSACreateEvent error\n");
-      return (-1);
+        MYERROR("WSACreateEvent error\n");
+        return (-1);
     }
-  WSAEventSelect(conf.sd_udp, conf.event_udp, FD_READ);
+    WSAEventSelect(conf.sd_udp, conf.event_udp, FD_READ);
 #endif
 
-  DPRINTF(1, "%d %d:%s:%d\n", conf.is_local_port_forwarding, conf.local_port, conf.remote_host, conf.remote_port);
-  if (conf.remote_port  && conf.remote_host)
-    do_client(&conf);
-  return (0);
+    DPRINTF(1, "%d %d:%s:%d\n", conf.is_local_port_forwarding, conf.local_port, conf.remote_host, conf.remote_port);
+    if (conf.remote_port  && conf.remote_host)
+        do_client(&conf);
+    return (0);
 }

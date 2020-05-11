@@ -26,6 +26,7 @@
 
 #include "client.h"
 #include "base32.h"
+#include "base64.h"
 #include "dns.h"
 #include "myrand.h"
 #include "list.h"
@@ -45,9 +46,9 @@
 
 static void		create_req_hdr(t_conf *conf, struct dns_hdr *hdr)
 {
-  memset(hdr, 0, sizeof(struct dns_hdr));
-  hdr->id = myrand();
-  hdr->rd = 1;
+    memset(hdr, 0, sizeof(struct dns_hdr));
+    hdr->id = myrand();
+    hdr->rd = 1;
 }
 
 /**
@@ -64,21 +65,21 @@ static void		create_req_hdr(t_conf *conf, struct dns_hdr *hdr)
 static int		add_query(struct dns_hdr *hdr, void *where, char *name, 
 				  t_conf *conf, uint16_t type)
 {
-  struct req_hdr	*req;
-  size_t		query_len;
-  int			actual_len;
+    struct req_hdr	*req;
+    size_t		query_len;
+    int			actual_len;
 
   
-  query_len = strlen(name) + 1;
-  actual_len = where - (void *)hdr;
-  if ((query_len + actual_len + RR_HDR_SIZE) > MAX_DNS_LEN)
-    return (-1);
-  PUT_16(&hdr->qdcount, GET_16(&hdr->qdcount)+1);
-  strcpy(where , name);
-  req = (struct req_hdr *) (where + query_len);
-  PUT_16(&req->qtype, type);
-  PUT_16(&req->qclass, CLASS_IN);
-  return ((int) (JUMP_REQ_HDR(req) - (char *)(hdr)));
+    query_len = strlen(name) + 1;
+    actual_len = where - (void *)hdr;
+    if ((query_len + actual_len + RR_HDR_SIZE) > MAX_DNS_LEN)
+        return (-1);
+    PUT_16(&hdr->qdcount, GET_16(&hdr->qdcount)+1);
+    strcpy(where , name);
+    req = (struct req_hdr *) (where + query_len);
+    PUT_16(&req->qtype, type);
+    PUT_16(&req->qclass, CLASS_IN);
+    return ((int) (JUMP_REQ_HDR(req) - (char *)(hdr)));
 }
 
 /**
@@ -89,15 +90,15 @@ static int		add_query(struct dns_hdr *hdr, void *where, char *name,
 
 static void	data2qname(t_request *req, void *output)
 {
-  base32_encode((char *)req->req_data, output, req->len);
-  strcat(output, ".");
-  strcat(output, req->domain);
+	base32_encode((unsigned char *)req->req_data, output, req->len);
+    strcat(output, ".");
+    strcat(output, req->domain);
 #ifndef _WIN32
-  DPRINTF(3, "Query is %s len %zd\n", (char *)output, strlen(output));
+    DPRINTF(3, "Query is %s len %zd\n", (char *)output, strlen(output));
 #else
-  DPRINTF(3, "Query is %s len %d\n", (char *)output, strlen(output));
+    DPRINTF(3, "Query is %s len %d\n", (char *)output, strlen(output));
 #endif
-  dns_encode(output);
+    dns_encode(output);
 }
 
 /**
@@ -109,13 +110,13 @@ static void	data2qname(t_request *req, void *output)
 
 uint8_t			query_is_compressed(char *buffer, uint16_t len)
 {
-  char			*name;
-  struct dns_hdr	*hdr;
+    char			*name;
+    struct dns_hdr	*hdr;
 
-  hdr = (struct dns_hdr *) buffer;
-  if (!(name  = jump_end_query(buffer, GET_16(&hdr->qdcount), len)))
-    return (0);
-  return ((*name & COMPRESS_FLAG_CHAR) == COMPRESS_FLAG_CHAR);
+    hdr = (struct dns_hdr *) buffer;
+    if (!(name  = jump_end_query(buffer, GET_16(&hdr->qdcount), len)))
+        return (0);
+    return ((*name & COMPRESS_FLAG_CHAR) == COMPRESS_FLAG_CHAR);
 }
 
 /**
@@ -128,27 +129,27 @@ uint8_t			query_is_compressed(char *buffer, uint16_t len)
 
 static int		create_request(t_conf *conf, void *output, t_request *req)
 {
-  char			name[MAX_HOST_NAME_ENCODED + 1];
-  struct dns_hdr	*hdr;
-  int			len;
+    char			name[MAX_HOST_NAME_ENCODED + 1];
+    struct dns_hdr	*hdr;
+    int			len;
 
-  hdr = (struct dns_hdr *) output; 
-  create_req_hdr(conf, hdr);
-  if ((ENCODED_LEN(BASE32_SIZE(req->len)) + strlen(req->domain) + 2 ) > (MAX_HOST_NAME_ENCODED))
+    hdr = (struct dns_hdr *) output; 
+    create_req_hdr(conf, hdr);
+    if (ENCODED_LEN(BASE32_SIZE(req->len)) + strlen(req->domain) + 2 > (MAX_HOST_NAME_ENCODED))
     {
 #ifndef _WIN32
-      fprintf(stderr, "send_query : data too long (%d bytes -> %zd bytes)\n", 
+        fprintf(stderr, "send_query : data too long (%d bytes -> %zd bytes)\n", 
 #else
-      fprintf(stderr, "send_query : data too long (%d bytes -> %d bytes)\n", 
+        fprintf(stderr, "send_query : data too long (%d bytes -> %d bytes)\n", 
 #endif
-	      req->len, ENCODED_LEN(BASE32_SIZE(req->len)) + strlen(req->domain) + 2 );
-      return (0);
+            req->len, ENCODED_LEN(BASE32_SIZE(req->len)) + strlen(req->domain) + 2 );
+        return (0);
     }
-  DPRINTF(3, "Sending dns id = 0x%x\n", ntohs(hdr->id)); 
-  data2qname(req, &name);
-  if ((len = add_query((struct dns_hdr *)output, JUMP_DNS_HDR(hdr), name, conf, req->type)) == -1)
-    return (0);
-  return (len);
+    data2qname(req, &name);
+    //DPRINTF(1, "Sending dns name = %s   id = 0x%x\n", name, ntohs(hdr->id));
+    if ((len = add_query((struct dns_hdr *)output, JUMP_DNS_HDR(hdr), name, conf, req->type)) == -1)
+        return (0);
+    return (len);
 }
 
 
@@ -160,19 +161,19 @@ static int		create_request(t_conf *conf, void *output, t_request *req)
 
 uint16_t		send_query(t_conf *conf, t_request *req)
 {
-  char			buffer[MAX_DNS_LEN + 1];  
-  int			len;
-  struct dns_hdr	*hdr;
+    char			buffer[MAX_DNS_LEN + 1];  
+    int			len;
+    struct dns_hdr	*hdr;
 
-  hdr = (struct dns_hdr*) &buffer;
-  len = create_request(conf, buffer, req);
-  if ((sendto(conf->sd_udp, buffer, len, 0,  (struct sockaddr *)&(conf->sa), sizeof(struct sockaddr))) == -1)
+    hdr = (struct dns_hdr*) &buffer;
+    len = create_request(conf, buffer, req);
+    if ((sendto(conf->sd_udp, buffer, len, 0,  (struct sockaddr *)&(conf->sa), sizeof(struct sockaddr))) == -1)
     {
-      perror("");
-      MYERROR("Sendto error (len = %d)", len);
-      return (0);
+        perror("");
+        MYERROR("Sendto error (len = %d)", len);
+        return (0);
     }
-  return (hdr->id);
+    return (hdr->id);
 }
 
 /**
@@ -187,30 +188,30 @@ uint16_t		send_query(t_conf *conf, t_request *req)
 
 int			transceive_query(t_conf *conf, t_request *request, char *output, int max_len)
 {
-  struct dns_hdr	*hdr;
-  uint16_t		id;
-  uint32_t		count = 0;
-  int			len, total_len = 0;
+    struct dns_hdr	*hdr;
+    uint16_t		id;
+    uint32_t		count = 0;
+    int			len, total_len = 0;
   
-  if ((id = send_query(conf, request)) == 0)
-    return (-1);
-  if ((request->len = get_simple_reply(conf, (char *)&(request->req_data), id)))
+    if ((id = send_query(conf, request)) == 0)
+        return (-1);
+    if ((request->len = get_simple_reply(conf, (char *)&(request->req_data), id)))
     {
-      request->req_data[request->len] = 0;
-      hdr = (struct dns_hdr *)&(request->req_data);
-      if (hdr->rcode)
-	{
-	  MYERROR("Auth error = %s\n", dns_error[hdr->rcode % (MAX_DNS_ERROR-1)]);
-	  return (-1);
-	}
-      while ((len = request->request_functions->rr_decode_next_reply(request, &output[total_len], 
+        request->req_data[request->len] = 0;
+        hdr = (struct dns_hdr *)&(request->req_data);
+        if (hdr->rcode)
+        {
+            MYERROR("Auth error = %s\n", dns_error[hdr->rcode % (MAX_DNS_ERROR-1)]);
+            return (-1);
+        }
+        while ((len = request->request_functions->rr_decode_next_reply(request, &output[total_len], 
 								     max_len - total_len, count++)))
-	{
-	  total_len += len;
-	}
-      return (total_len);
+        {
+            total_len += len;
+        }
+        return (total_len);
     }
-  return (-1);
+    return (-1);
 }
 
 
@@ -228,22 +229,22 @@ int			transceive_query(t_conf *conf, t_request *request, char *output, int max_l
 int		create_simple_req(t_conf *conf, t_request *request, 
 				  char *subdomain, char *domain, uint16_t session_id)
 {
-  t_packet	*packet;
+    t_packet	*packet;
   
-  packet = (t_packet *)&request->u.packet;
-  memset(packet, 0 , sizeof(t_packet));
-  packet->session_id = session_id;
-  packet->ack_seq = myrand();
-  packet->seq = myrand();
-  request->len = PACKET_LEN;
-  request->type = conf->query_functions->type;
-  request->request_functions = conf->query_functions;
-  if ((strlen(conf->domain) + strlen(subdomain)) > MAX_DNS_LEN)
-    return (-1);
-  request->domain = domain;
-  strcpy(request->domain, subdomain);
-  strcat(request->domain, conf->domain);
-  return (0);
+    packet = (t_packet *)&request->u.packet;
+    memset(packet, 0 , sizeof(t_packet));
+    packet->session_id = session_id;
+    packet->ack_seq = myrand();
+    packet->seq = myrand();
+    request->len = PACKET_LEN;
+    request->type = conf->query_functions->type;
+    request->request_functions = conf->query_functions;
+    if ((strlen(conf->domain) + strlen(subdomain)) > MAX_DNS_LEN)
+        return (-1);
+    request->domain = domain;
+    strcpy(request->domain, subdomain);
+    strcat(request->domain, conf->domain);
+    return (0);
 }
 
 /**
@@ -256,36 +257,34 @@ int		create_simple_req(t_conf *conf, t_request *request,
 
 int	push_req_data(t_conf *conf, t_simple_list *client, t_list *queue, t_request *req)
 {
-  t_packet		*query;
-  char			*ptr;
+    t_packet		*query;
 
-  req->domain = conf->domain;
-  req->request_functions = conf->query_functions;
-  req->type =  conf->query_functions->type;
+    req->domain = conf->domain;
+    req->request_functions = conf->query_functions;
+    req->type =  conf->query_functions->type;
 
-  query =  (t_packet *)&(req->u.packet);
-  if (!req->len)
-    query->type = NOP;
-  else
+    query =  (t_packet *)&(req->u.packet);
+    if (!req->len)
+        query->type = NOP;
+    else
     {
-      if (req->len > 0)
-	query->type = DATA;
-      else
-	{
-	  DPRINTF(1, "send desauth\n");
-	  query->type = DESAUTH;
-	  req->len = 0;
-	}
+        if (req->len > 0)
+            query->type = DATA;
+        else
+        {
+            DPRINTF(1, "send desauth\n");
+            query->type = DESAUTH;
+            req->len = 0;
+        }
     }
-  req->len += PACKET_LEN;
-  query->session_id = client->session_id;
-  PUT_16(&query->seq,client->num_seq);
-  PUT_16(&query->ack_seq,queue->peer.ack_seq);
-  queue->info.num_seq = client->num_seq;
-  ptr = ((char *)query) + PACKET_LEN;
-  DPRINTF(2, "Client 0x%x : push data [%d] ack [%d] len = %d\n", client->session_id, client->num_seq, 
-	  queue->peer.ack_seq, req->len-(int)PACKET_LEN);
-  if ((queue->len = create_request(conf, &(queue->data), req)))
-    return (queue->len);
-  return (0);
+    req->len += PACKET_LEN;
+    query->session_id = client->session_id;
+    PUT_16(&query->seq,client->num_seq);
+    PUT_16(&query->ack_seq,queue->peer.ack_seq);
+    queue->info.num_seq = client->num_seq;
+    DPRINTF(2, "Client 0x%x : push data [%d] ack [%d] len = %d\n", client->session_id, client->num_seq, 
+        queue->peer.ack_seq, req->len-(int)PACKET_LEN);
+    if ((queue->len = create_request(conf, &(queue->data), req)))
+        return (queue->len);
+    return (0);
 }

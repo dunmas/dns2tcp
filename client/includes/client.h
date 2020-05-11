@@ -27,7 +27,7 @@
 */
 
 #define RESOLV_CONF	"/etc/resolv.conf"
-#define QUEUE_SIZE	256
+#define QUEUE_SIZE	128
 
 #define WINDOW_SIZE	(QUEUE_SIZE / 2)
 #define	NOP_SIZE	(WINDOW_SIZE / 3)
@@ -35,7 +35,7 @@
 #define	MAX_DATA_SIZE	(WINDOW_SIZE - NOP_SIZE)
 
 #define SOCKET_TIMEOUT  1 /* 1s */
-#define REPLY_TIMEOUT	3 /* 1s */
+#define REPLY_TIMEOUT	4 /* 1s */
 
 
 #include "packet.h"

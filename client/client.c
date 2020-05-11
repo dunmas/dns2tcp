@@ -64,7 +64,7 @@ int		delete_client(t_conf *conf, t_simple_list *client)
 {
 	t_simple_list	*tmp;
   
-	DPRINTF(1, "free client \n");
+	DPRINTF(2, "free client \n");
 
 	if (conf->client == client)
     {
@@ -106,7 +106,7 @@ int		delete_client(t_conf *conf, t_simple_list *client)
 		{
 			if ((client->fd_ro != client->fd_wo) && (client->fd_ro != -1))
 			{
-				DPRINTF(1, "Closing client->fd_wo\n");
+				DPRINTF(2, "Closing client->fd_wo\n");
 #ifdef _WIN32
 				shutdown(client->fd_ro, SD_SEND);
 #else
@@ -116,7 +116,7 @@ int		delete_client(t_conf *conf, t_simple_list *client)
 			}
 			if (!(client->fd_ro < 0))
 			{
-				DPRINTF(1, "Closing client->fd_ro\n");
+				DPRINTF(2, "Closing client->fd_ro\n");
 #ifdef _WIN32
 				shutdown(client->fd_ro, SD_SEND);
 #else
@@ -136,11 +136,11 @@ int		delete_client(t_conf *conf, t_simple_list *client)
 
 static int	delete_all_client(t_conf *conf)
 {
-  t_simple_list	*client;
+    t_simple_list	*client;
   
-  while ((client = conf->client))
-    delete_client(conf, client);
-  return (0);
+    while ((client = conf->client))
+        delete_client(conf, client);
+    return (0);
 }
 
 /**
@@ -151,8 +151,7 @@ static int	delete_all_client(t_conf *conf)
  * @retval 0 on success
  * @retval -1 on error
  */
-int		add_client(t_conf *conf, socket_t fd_ro,
-	socket_t fd_wo)
+int		add_client(t_conf *conf, socket_t fd_ro, socket_t fd_wo)
 {
 	uint16_t	session_id;
 	t_simple_list	*client;
@@ -216,8 +215,7 @@ int		add_client(t_conf *conf, socket_t fd_ro,
  * @retval 0 on success
  * @retval -1 on error
  */
-int		add_rpf_client(t_conf *conf, socket_t fd_ro,
-	socket_t fd_wo, uint16_t session_id)
+int		add_rpf_client(t_conf *conf, socket_t fd_ro, socket_t fd_wo, uint16_t session_id)
 {
 	t_simple_list	*client;
 	static t_request	req;
@@ -287,7 +285,7 @@ int		add_rpf_client(t_conf *conf, socket_t fd_ro,
 
 static int	check_incoming_ns_reply(t_conf *conf, char *buffer)
 {
-  int		len = 0;
+    int		len = 0;
   
   /* Can be blocking here */
 	while ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
@@ -382,64 +380,64 @@ static int	check_incoming_client(t_conf *conf, t_fd_event *descriptors, int offs
 
 static int	get_socket_data(t_conf *conf, t_fd_event *descriptors, int offset)
 {
-  char		buffer[MAX_EDNS_LEN+1];
-  int		res;
+    char		buffer[MAX_EDNS_LEN+1];
+    int		res;
   
-  buffer[MAX_EDNS_LEN] = 0;
+    buffer[MAX_EDNS_LEN] = 0;
 
 #ifdef DEBUG
-  t_simple_list  *client;
+    t_simple_list  *client;
 
-  if ((debug > 0) && ((!conf->use_stdin) && (IS_THIS_SOCKET(0, 0, descriptors, offset))))
+    if ((debug > 0) && ((!conf->use_stdin) && (IS_THIS_SOCKET(0, 0, descriptors, offset))))
     {
-      read(0, buffer, MINI_BUFF);
-      if ((client = conf->client))
-	{
-	  for (; client; client = client->next)
-	    queue_dump(client);
-	}
-      else
-	DPRINTF(2, "No more client\n");
-      return (0);
+        read(0, buffer, MINI_BUFF);
+        if ((client = conf->client))
+        {
+            for (; client; client = client->next)
+                queue_dump(client);
+        }
+        else
+            DPRINTF(2, "No more client\n");
+        return (0);
     }
 #endif
     
-  /* Incoming NS packet */
-  if (IS_THIS_SOCKET(conf->sd_udp, conf->event_udp, descriptors, offset))
-    return (check_incoming_ns_reply(conf, (char *) buffer));
+    /* Incoming NS packet */
+    if (IS_THIS_SOCKET(conf->sd_udp, conf->event_udp, descriptors, offset))
+        return (check_incoming_ns_reply(conf, (char *) buffer));
 
-  /* Incoming client packet */
-  if ((res = check_incoming_client_data(conf, descriptors, offset)) != 1)
-    return (res);
+    /* Incoming client packet */
+    if ((res = check_incoming_client_data(conf, descriptors, offset)) != 1)
+        return (res);
 
-  /* Incoming TCP client */
-  if ((res = check_incoming_client(conf, descriptors, offset)) != 1)
-	  return (res);
+    /* Incoming TCP client */
+    if ((res = check_incoming_client(conf, descriptors, offset)) != 1)
+        return (res);
 
-  return (-1);
+    return (-1);
 }
 
 
 #ifndef _WIN32
 int	unix_check_for_data(t_conf *conf, fd_set *rfds, int max_fd, struct timeval *tv)
 {
-  int	retval;
+    int	retval;
 
-  if ((retval =  select(max_fd+1, rfds, 0, 0, tv)) == -1)
+    if ((retval =  select(max_fd+1, rfds, 0, 0, tv)) == -1)
     {	  
-      DPRINTF(1, "Select error ..\n");
-      return (-1);
+        DPRINTF(1, "Select error ..\n");
+        return (-1);
     }
-  if (retval)
+    if (retval)
     {
-      if ((get_socket_data(conf, rfds, 0)) && (!conf->local_port))
-	{
-	  DPRINTF(1, "Exiting ..\n");
-	  delete_all_client(conf);
-	  return (-1);
-	}
+        if ((get_socket_data(conf, rfds, 0)) && (!conf->local_port))
+        {
+            DPRINTF(1, "Exiting ..\n");
+            delete_all_client(conf);
+            return (-1);
+        }
     }
-  return (0);
+    return (0);
 }
 
 #else
@@ -515,7 +513,6 @@ int			do_client(t_conf *conf)
 			DPRINTF(1, "No more clients. Exiting.\n");
 			return (0);
 		}
-		//DPRINTF(1, "In do_client loop\n");
 #ifdef _WIN32
         max_fd = prepare_select(conf, rfds, &tv);
 		if (win_check_for_data(conf, rfds, max_fd, &tv))

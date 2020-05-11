@@ -140,7 +140,7 @@ int			queue_resend(t_conf *conf, t_simple_list *client, t_list *queue)
 	queue->peer.old_id =  queue->peer.id;
 	queue->peer.id = hdr->id;
   
-	DPRINTF(2, "Queue resend seq %d id = 0x%x \n", queue->info.num_seq, ntohs(queue->peer.id));
+	//DPRINTF(1, "Queue resend seq %d id = 0x%x   old id = 0x%x \n", queue->info.num_seq, ntohs(queue->peer.id), ntohs(queue->peer.old_id));
 	queue_send(conf, client, queue);
 	return (0);
 }
@@ -267,7 +267,7 @@ int		write_to_client(t_conf *conf, t_simple_list *client, const char *buffer, in
 	{
 		if (total_len - PACKET_LEN != 2)
 		{
-			MYERROR("Got %d bytes for pseudoclient. Should be 2 bytes\n", total_len - PACKET_LEN);
+			MYERROR("Got %lu bytes for pseudoclient. Should be 2 bytes\n", total_len - PACKET_LEN);
 			return (0);
 		}
 		new_session_id = *((uint16_t*)&buffer[PACKET_LEN]);
@@ -375,7 +375,6 @@ t_list		*queue_find_empty_data_cell(t_simple_list *client)
 	t_list	*queue;
 
 	queue = client->queue;
-	DPRINTF(2, "queue = 0x%p\n", queue);
 	while ((queue) && (queue->status != FREE))
 		queue = queue->next;
 	if (!queue)
@@ -429,7 +428,7 @@ int		queue_flush(t_conf *conf, t_simple_list *client)
 		{
 			MYERROR("Queue design is too small\n");
 			queue_dump(client);
-			while (1);
+			exit(0);
 			return (-1);
 		}
 		queue_prepare_ack(free_cell,queue->info.num_seq);
@@ -439,8 +438,18 @@ int		queue_flush(t_conf *conf, t_simple_list *client)
 		free_cell = free_cell->next;
     }
 	/* FIXME queue can be null ? */
-	if ((!queue) || (queue == client->queue))
+	if (!queue)
+	{
+		MYERROR("Queue NULL wtf?\n");
+		return -1;
+	}
+	if (queue == client->queue)
+	{
+		DPRINTF(2, "[queue_flush] First queue is not in RECEIEVED state, id 0x%x\n", ntohs(queue->peer.id));
+		DPRINTF(2, "[queue_flush] Resending 0x%x id\n", ntohs(queue->peer.id));
+		queue_resend(conf, client, queue);
 		return (-1);
+	}
 	return (queue_change_root(client, queue));
 }
 
@@ -455,7 +464,6 @@ int		queue_flush(t_conf *conf, t_simple_list *client)
 int			queue_put_nop(t_conf *conf, t_simple_list *client)
 {
 	t_list		*queue;
-	int			len;
 	struct dns_hdr	*hdr;
 	t_request		req;
 
@@ -467,7 +475,7 @@ int			queue_put_nop(t_conf *conf, t_simple_list *client)
 			/* num seq must not be null */
 			if (!++client->num_seq)
 				client->num_seq++;
-			len = push_req_data(conf, client, queue, &req);
+			push_req_data(conf, client, queue, &req);
 			if (queue_send(conf, client, queue) == -1)
 			{
 				client->num_seq--;
@@ -539,9 +547,7 @@ int			queue_get_udp_data(t_conf *conf, char *buffer, int len)
 				queue->status = RECEIVED;
 				queue->data[len] = 0;
 				queue->len = len;
-				if (queue_flush(conf, client) && conf->local_port)
-					/* check TCP socket only if we have bind a port */
-					return (!socket_is_valid(conf->sd_tcp));
+				return (queue_flush(conf, client));
 			return (0);
 			}
 		}
@@ -580,7 +586,6 @@ static int	windows_client_read(t_conf *conf, t_simple_list *client, t_list *queu
 int			queue_get_tcp_data(t_conf *conf, t_simple_list *client)
 {
 	t_list		*queue;
-	int			len;
 	size_t		max_len;
 	struct dns_hdr	*hdr;
 #ifndef _WIN32
@@ -622,7 +627,7 @@ int			queue_get_tcp_data(t_conf *conf, t_simple_list *client)
 		DPRINTF(3, "Read tcp %d bytes on sd %d, crc = 0x%x\n", req.len, client->fd_ro,
 			crc16((const char *)&req.req_data[PACKET_LEN], req.len)
 	    );
-		len = push_req_data(conf, client, queue, &req);
+		push_req_data(conf, client, queue, &req);
 		if (queue_send(conf, client, queue) == -1)
 			return (-1);
 		client->control.data_pending++;

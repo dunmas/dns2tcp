@@ -29,6 +29,7 @@
 #include "requests.h"
 #include "socket.h"
 #include "base32.h"
+#include "base64.h"
 #include "myrand.h"
 #include "session.h"
 #include "myerror.h"

@@ -336,7 +336,6 @@ int			queue_flush_expired_data(t_conf *conf)
 		return (-1);
 	for (client = conf->client; client; client = client->next)
 	{
-        queue_dump(client);
 		for (queue = client->queue; queue ; queue = queue->next)
 		{
 			if  ((tv.tv_sec >  queue->timeout.tv_sec)  ||

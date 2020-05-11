@@ -40,10 +40,10 @@
 int	socket_is_valid(socket_t socket)
 {
 #ifndef _WIN32
-  return (socket != -1);
+    return (socket != -1);
 #else
-  // TODO
-  return (socket != -1);
+    // TODO
+    return (socket != -1);
 #endif
 }
 
@@ -51,67 +51,70 @@ int	socket_is_valid(socket_t socket)
 
 uint16_t		unix_get_simple_reply(t_conf *conf, char *buffer, uint16_t id)
 {
-  fd_set                rfds;
-  int                   retval;
-  struct timeval        tv;
-  struct dns_hdr	*hdr;
-  int			len = 0; 
+    fd_set                rfds;
+    int                   retval;
+    struct timeval        tv;
+    struct dns_hdr	*hdr;
+    int			len = 0; 
   
-  tv.tv_sec = (time_t) conf->conn_timeout;
-  tv.tv_usec = 0;
-  hdr = (struct dns_hdr	*) buffer;
-  FD_ZERO(&rfds);
+    tv.tv_sec = (time_t) conf->conn_timeout;
+    tv.tv_usec = 0;
+    hdr = (struct dns_hdr	*) buffer;
+    FD_ZERO(&rfds);
 
-  add_socket(conf->sd_udp, &rfds, 0);
-  while ((retval = select(conf->sd_udp+1, &rfds, NULL, NULL, &tv)) != -1)
+    add_socket(conf->sd_udp, &rfds, 0);
+    while ((retval = select(conf->sd_udp+1, &rfds, NULL, NULL, &tv)) != -1)
     {
-      if (!retval)
-	{
-	  fprintf(stderr, "No response from DNS %s\n", conf->dns_server);
-	  return (0);
-	}
-      if ((IS_THIS_SOCKET(conf->sd_udp, conf->event_udp, &rfds,  retval)) 
-	  && ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0))
-	{
-	  if (hdr->id == id)
-	    return (len);
-	  else 
-	    queue_get_udp_data(conf, buffer, len);
-	}
-      add_socket(conf->sd_udp, &rfds, 0);
-      tv.tv_sec = (time_t) conf->conn_timeout;
+        if (!retval)
+        {
+            fprintf(stderr, "No response from DNS %s\n", conf->dns_server);
+            return (0);
+        }
+        if ((IS_THIS_SOCKET(conf->sd_udp, conf->event_udp, &rfds,  retval)) 
+            && ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0))
+        {
+            if (hdr->id == id)
+                return (len);
+            else 
+                queue_get_udp_data(conf, buffer, len);
+        }
+        add_socket(conf->sd_udp, &rfds, 0);
+        tv.tv_sec = (time_t) conf->conn_timeout;
     }
-  MYERROR("Select error");
-  return (0);
+    MYERROR("Select error");
+    return (0);
 }
 
 #else
 
 uint16_t		win_get_simple_reply(t_conf *conf, char *buffer, uint16_t id)
 {
-  DWORD                 retval;
-  struct dns_hdr	*hdr;
-  int			len = 0; 
+	DWORD                 retval;
+	struct dns_hdr	*hdr;
+	int			len = 0; 
   
-  hdr = (struct dns_hdr	*) buffer;
-  
-  while ((retval = WaitForSingleObject(conf->event_udp, conf->conn_timeout*1000)) != WAIT_FAILED)
+	hdr = (struct dns_hdr	*) buffer;
+	while ((retval = WaitForSingleObject(conf->event_udp, conf->conn_timeout*1000)) != WAIT_FAILED)
     {
-      if (retval != WAIT_OBJECT_0)
-	{
-	  fprintf(stderr, "No response from DNS %s\n", conf->dns_server);
-	  return (0);
-	}
-      if ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
-	{
-	  if (hdr->id == id)
-	    return (len);
-	  else 
-	    queue_get_udp_data(conf, buffer, len);
-	}
+		if (retval != WAIT_OBJECT_0)
+		{
+			fprintf(stderr, "No response from DNS %s\n", conf->dns_server);
+			return (0);
+		}
+		if ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
+		{
+			if (hdr->id == id)
+				return (len);
+			else
+				queue_get_udp_data(conf, buffer, len);
+		}
+		else
+		{
+			ResetEvent(conf->event_udp);
+		}
     }
-  MYERROR("Select error");
-  return (0);
+	MYERROR("Select error");
+	return (0);
 }
 #endif
 
@@ -127,9 +130,9 @@ uint16_t		win_get_simple_reply(t_conf *conf, char *buffer, uint16_t id)
 uint16_t		get_simple_reply(t_conf *conf, char *buffer, uint16_t id)
 {
 #ifndef _WIN32
-  return (unix_get_simple_reply(conf, buffer, id));
+	return (unix_get_simple_reply(conf, buffer, id));
 #else
-  return (win_get_simple_reply(conf, buffer, id));
+	return (win_get_simple_reply(conf, buffer, id));
 #endif
   
 }
@@ -145,14 +148,14 @@ uint16_t		get_simple_reply(t_conf *conf, char *buffer, uint16_t id)
 static int	set_nonblock(socket_t sd)
 {
 #ifndef _WIN32
-  int		opt;
+    int		opt;
 
-  if ((opt = fcntl(sd, F_GETFL)) == -1)
-    return (-1);
-  if ((opt = fcntl(sd, F_SETFL, opt|O_NONBLOCK)) == -1)
-    return (-1);
+    if ((opt = fcntl(sd, F_GETFL)) == -1)
+        return (-1);
+    if ((opt = fcntl(sd, F_SETFL, opt|O_NONBLOCK)) == -1)
+        return (-1);
 #endif
-  return (0);
+    return (0);
 }
 
 
@@ -231,6 +234,9 @@ int			connect_socket(t_conf *conf, socket_t* tsock)
 		fprintf(stderr, "Connected to port : %d\n", conf->remote_port);
 		return (0);
 	}
+    
+    MYERROR("connect_socket error");
+    return (-1);
 }
 
 /**
@@ -240,29 +246,26 @@ int			connect_socket(t_conf *conf, socket_t* tsock)
 
 socket_t		create_socket(t_conf *conf)
 {
-  struct hostent        *hostent;
-  socket_t		sd;
+    struct hostent        *hostent;
+    socket_t		sd;
 #ifdef _WIN32
-  WSADATA		wsa;
+    WSADATA		wsa;
 
-  WSAStartup(MAKEWORD(2,2), &wsa);
+    WSAStartup(MAKEWORD(2,2), &wsa);
 #endif
-  if (!(hostent = gethostbyname(conf->dns_server)))
+    if (!(hostent = gethostbyname(conf->dns_server)))
     {
-      MYERROR("Gethostbyname \'%s\'",conf->dns_server);
-      return (-1);
+        MYERROR("Gethostbyname \'%s\'",conf->dns_server);
+        return (-1);
     }
-  conf->sa.sin_port = htons(53);
-  memcpy(&conf->sa.sin_addr.s_addr, hostent->h_addr, sizeof(conf->sa.sin_addr.s_addr));
-  conf->sa.sin_family = AF_INET;
-  if ( ((sd = socket(PF_INET, SOCK_DGRAM, 0)) < 0)
-    || (set_nonblock(sd)) )
+    conf->sa.sin_port = htons(53);
+    memcpy(&conf->sa.sin_addr.s_addr, hostent->h_addr, sizeof(conf->sa.sin_addr.s_addr));
+    conf->sa.sin_family = AF_INET;
+    if ( ((sd = socket(PF_INET, SOCK_DGRAM, 0)) < 0) || (set_nonblock(sd)) )
     {
-      MYERROR("socket error");
-      return (-1);
+        MYERROR("socket error");
+        return (-1);
     }
-  DPRINTF(3, "Create socket for dns : \'%s\' \n", conf->dns_server);
-  return (sd);      
+    DPRINTF(3, "Create socket for dns : \'%s\' \n", conf->dns_server);
+    return (sd);      
 }
-
-
