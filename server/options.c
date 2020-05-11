@@ -39,8 +39,8 @@
 
 static void	usage(char *name)
 {
-  fprintf(stderr, "Usage : %s [ -i IP ] [ -F ] [ -d debug_level ] [ -f config-file ] [ -p pidfile ]\n", name);
-  fprintf(stderr, "\t -F : dns2tcpd will run in foreground\n");
+    fprintf(stderr, "Usage : %s [ -i IP ] [ -F ] [ -d debug_level ] [ -f config-file ] [ -p pidfile ]\n", name);
+    fprintf(stderr, "\t -F : dns2tcpd will run in foreground\n");
 }
 
 
@@ -53,14 +53,14 @@ static void	usage(char *name)
 
 static int	check_mandatory_param(t_conf *conf)
 {
-  if (!conf->port)
-    conf->port = 53;
-  if (!conf->my_domain)
+    if (!conf->port)
+        conf->port = 53;
+    if (!conf->my_domain)
     {
-      LOG("Need a domain name\n");
-      return (-1);
+        LOG("Need a domain name\n");
+        return (-1);
     }
-  return (0);
+    return (0);
 }
 
 /**
@@ -74,40 +74,40 @@ static int	check_mandatory_param(t_conf *conf)
 
 static int	server_copy_param(void *my_conf, char *token, char *value)
 {
-  char		*buffer = 0;
-  t_conf	*conf;
+    char		*buffer = 0;
+    t_conf	*conf;
 
-  conf = (t_conf *)my_conf;
-  if (token)
+    conf = (t_conf *)my_conf;
+    if (token)
     {
-      /* Integer value */
-      if (!strcmp(token, "debug_level"))
-	return (debug ? 0 : (debug = atoi(value)));
-      if (!strcmp(token, "port"))
-	return (conf->port = atoi(value));
+        /* Integer value */
+        if (!strcmp(token, "debug_level"))
+            return (debug ? 0 : (debug = atoi(value)));
+        if (!strcmp(token, "port"))
+            return (conf->port = atoi(value));
 
-      if (!(buffer = strdup(value)))
-	{
-	  LOG("Memory error\n");
-	  exit (-1);
-	}
-      /* String value */
-      if (!strcmp(token, "chroot"))
-	return ((conf->chroot = buffer) > 0);
-      if (!strcmp(token, "key"))
-	return ((conf->key = buffer) > 0);
-      if (!strcmp(token, "user"))
-	return ((conf->user = buffer) > 0);
-      if (!strcmp(token, "domain"))
-	return ((conf->my_domain = buffer) > 0);
-      if (!strcmp(token, "pid_file"))
-	return ((conf->pid_file = buffer) > 0);
-      if (!strcmp(token, "listen"))
-	return ((conf->my_ip ? 0 : (conf->my_ip = buffer) > 0));
+        if (!(buffer = strdup(value)))
+        {
+            LOG("Memory error\n");
+            exit (-1);
+        }
+        /* String value */
+        if (!strcmp(token, "chroot"))
+            return ((conf->chroot = buffer) > 0);
+        if (!strcmp(token, "key"))
+            return ((conf->key = buffer) > 0);
+        if (!strcmp(token, "user"))
+            return ((conf->user = buffer) > 0);
+        if (!strcmp(token, "domain"))
+            return ((conf->my_domain = buffer) > 0);
+        if (!strcmp(token, "pid_file"))
+            return ((conf->pid_file = buffer) > 0);
+        if (!strcmp(token, "listen"))
+            return ((conf->my_ip ? 0 : (conf->my_ip = buffer) > 0));
     }
-  if (buffer)
-    free(buffer);
-  return (-1);
+    if (buffer)
+        free(buffer);
+    return (-1);
 }
 
 /**
@@ -121,48 +121,48 @@ static int	server_copy_param(void *my_conf, char *token, char *value)
 
 int			get_option(int argc, char **argv, t_conf *conf)
 {
-  int			c;
-  char			config_file[CONFIG_FILE_LEN];
+    int			c;
+    char			config_file[CONFIG_FILE_LEN];
 
-  bzero(conf, sizeof(t_conf));
-  config_file[0] = 0;
-  debug = 0;
-  while (1)
+    bzero(conf, sizeof(t_conf));
+    config_file[0] = 0;
+    debug = 0;
+    while (1)
     {
-      c = getopt (argc, argv, "hFf:i:d:p:");
-      if (c == -1)
-        break;
-      switch (c) {
-      case 'f':
-	if (strlen(optarg) > (CONFIG_FILE_LEN - 10))
-	  return (-1);
-	strncpy(config_file, optarg, CONFIG_FILE_LEN-1);
-	break;	
-      case 'd':
-	debug = atoi(optarg);
-	break;
-      case 'F':
-	conf->foreground = 1;
-	break;
-      case 'i':
-	conf->my_ip = optarg;
-	break;
-      case 'p':
-	conf->pidfile = optarg;
-	break;
-      case 'h':
-      default :
-	usage(argv[0]);
-	return(-1);
-      }
+        c = getopt (argc, argv, "hFf:i:d:p:");
+        if (c == -1)
+            break;
+        switch (c) {
+            case 'f':
+                if (strlen(optarg) > (CONFIG_FILE_LEN - 10))
+                    return (-1);
+                strncpy(config_file, optarg, CONFIG_FILE_LEN-1);
+                break;	
+            case 'd':
+                debug = atoi(optarg);
+                break;
+            case 'F':
+                conf->foreground = 1;
+                break;
+            case 'i':
+                conf->my_ip = optarg;
+                break;
+            case 'p':
+                conf->pidfile = optarg;
+                break;
+            case 'h':
+            default :
+                usage(argv[0]);
+                return(-1);
+        }
     }
-  read_config(config_file, conf, server_copy_param, ".dns2tcpdrc");
-  if (check_mandatory_param(conf) == -1)
+    read_config(config_file, conf, server_copy_param, ".dns2tcpdrc");
+    if (check_mandatory_param(conf) == -1)
     {
-      usage(argv[0]);
-      return (-1);
+        usage(argv[0]);
+        return (-1);
     }
-  return (0);
+    return (0);
 }
 
 	  

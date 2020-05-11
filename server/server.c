@@ -121,30 +121,30 @@ int		delete_client(t_conf *conf, t_simple_list *client)
 // Warning Zombie ahead
 void			delete_zombie(t_conf *conf)
 {
-  t_simple_list		*client;
-  t_simple_list		*tmp;
-  struct timeval	tv;
-  struct timezone	tz;
+    t_simple_list		*client;
+    t_simple_list		*tmp;
+    struct timeval	tv;
+    struct timezone	tz;
   
-  if (!(gettimeofday(&tv, &tz)))
-    for (client = conf->client; client; client = tmp)
-      {
-	tmp = client->next;
-	if (tv.tv_sec > client->control.tv.tv_sec)
-	  {
-	    if (client->sd_tcp != -1)
+    if (!(gettimeofday(&tv, &tz)))
+        for (client = conf->client; client; client = tmp)
         {
-	      close(client->sd_tcp);
-          client->sd_tcp = -1;
+            tmp = client->next;
+            if (tv.tv_sec > client->control.tv.tv_sec)
+            {
+                if (client->sd_tcp != -1)
+                {
+                    close(client->sd_tcp);
+                    client->sd_tcp = -1;
+                }
+                if (client->sd != -1)
+                {
+                    close(client->sd);
+                    client->sd = -1;
+                }
+                delete_client(conf, client);
+            }
         }
-	    if (client->sd != -1)
-        {
-	      close(client->sd);
-          client->sd = -1;
-        }
-	    delete_client(conf, client);
-	  }
-      }
 }
 
 #define MINI_BUFF 64

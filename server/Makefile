@@ -53,7 +53,7 @@ am_dns2tcpd_OBJECTS = hmac_sha1.$(OBJEXT) crc16.$(OBJEXT) rr.$(OBJEXT) \
 	requests.$(OBJEXT) server.$(OBJEXT) list.$(OBJEXT) \
 	dns.$(OBJEXT) dns_decode.$(OBJEXT) mystrnlen.$(OBJEXT) \
 	memdump.$(OBJEXT) base32.$(OBJEXT) socket.$(OBJEXT) \
-	options.$(OBJEXT) main.$(OBJEXT)
+	options.$(OBJEXT) main.$(OBJEXT) base64.$(OBJEXT)
 dns2tcpd_OBJECTS = $(am_dns2tcpd_OBJECTS)
 dns2tcpd_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I. -I$(top_builddir)
@@ -186,6 +186,7 @@ dns2tcpd_SOURCES = \
 			../common/mystrnlen.c 	\
 			../common/memdump.c 	\
 			../common/base32.c 	\
+			../common/base64.c 	\
 			socket.c 		\
 			options.c 		\
 			main.c
@@ -273,6 +274,7 @@ distclean-compile:
 
 include ./$(DEPDIR)/auth.Po
 include ./$(DEPDIR)/base32.Po
+include ./$(DEPDIR)/base64.Po
 include ./$(DEPDIR)/config.Po
 include ./$(DEPDIR)/crc16.Po
 include ./$(DEPDIR)/dns.Po
@@ -445,6 +447,20 @@ base32.obj: ../common/base32.c
 #	source='../common/base32.c' object='base32.obj' libtool=no \
 #	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
 #	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o base32.obj `if test -f '../common/base32.c'; then $(CYGPATH_W) '../common/base32.c'; else $(CYGPATH_W) '$(srcdir)/../common/base32.c'; fi`
+
+base64.o: ../common/base64.c
+	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT base64.o -MD -MP -MF $(DEPDIR)/base64.Tpo -c -o base64.o `test -f '../common/base64.c' || echo '$(srcdir)/'`../common/base64.c
+	$(am__mv) $(DEPDIR)/base64.Tpo $(DEPDIR)/base64.Po
+#	source='../common/base64.c' object='base64.o' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o base64.o `test -f '../common/base64.c' || echo '$(srcdir)/'`../common/base64.c
+
+base64.obj: ../common/base64.c
+	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT base64.obj -MD -MP -MF $(DEPDIR)/base64.Tpo -c -o base64.obj `if test -f '../common/base64.c'; then $(CYGPATH_W) '../common/base64.c'; else $(CYGPATH_W) '$(srcdir)/../common/base64.c'; fi`
+	$(am__mv) $(DEPDIR)/base64.Tpo $(DEPDIR)/base64.Po
+#	source='../common/base64.c' object='base64.obj' libtool=no \
+#	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) \
+#	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o base64.obj `if test -f '../common/base64.c'; then $(CYGPATH_W) '../common/base64.c'; else $(CYGPATH_W) '$(srcdir)/../common/base64.c'; fi`
 
 ID: $(HEADERS) $(SOURCES) $(LISP) $(TAGS_FILES)
 	list='$(SOURCES) $(HEADERS) $(LISP) $(TAGS_FILES)'; \

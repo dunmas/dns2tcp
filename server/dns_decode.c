@@ -42,31 +42,31 @@ extern const t_command dns_commands[];
 
 static int	dns_strip_dot_and_domain(t_conf *conf, t_request *req, char *output)
 {
-  char		*ptr;
-  char		*ptr2;
-  unsigned int 	i=0, j, len;
-  int		req_len, domain_len;
+    char		*ptr;
+    char		*ptr2;
+    unsigned int 	i=0, j, len;
+    int		req_len, domain_len;
 
-  req_len = strlen(output);
-  domain_len = strlen(conf->my_domain);
-  ptr = strstr(output + (req_len - domain_len), conf->my_domain);
-  if (!ptr)
+    req_len = strlen(output);
+    domain_len = strlen(conf->my_domain);
+    ptr = strstr(output + (req_len - domain_len), conf->my_domain);
+    if (!ptr)
     {
-      // FIXME bug ipv6 support ?
-      LOG("Query from %u.%u.%u.%u for unknown domain %s",
+        // FIXME bug ipv6 support ?
+        LOG("Query from %u.%u.%u.%u for unknown domain %s",
 #ifndef WORDS_BIGENDIAN
-	  (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff),
-	  (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
-	  (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
-	  (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff),
 #else
-	  (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff),
-	  (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
-	  (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
-	  (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 24) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 16) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr >> 8) & 0xff),
+        (unsigned int) ((req->sa.sin_addr.s_addr) & 0xff),
 #endif
-	  output);
-      return (-1);
+        output);
+        return (-1);
     }
   /* 
      look for :
@@ -75,32 +75,32 @@ static int	dns_strip_dot_and_domain(t_conf *conf, t_request *req, char *output)
 	...
 	cf. request.c
   */
-  while (dns_commands[i++].str)
+    while (dns_commands[i++].str)
     {
-      if ( ( dns_commands[i-1].str_len + 1 + domain_len <= req_len )
-	   && ((ptr2 = strstr(ptr - dns_commands[i-1].str_len, dns_commands[i-1].str))))
-	{
-	  ptr = ptr2;
-	  req->cmd = &dns_commands[i-1];
-	  break;
-	}
+        if ( ( dns_commands[i-1].str_len + 1 + domain_len <= req_len )
+            && ((ptr2 = strstr(ptr - dns_commands[i-1].str_len, dns_commands[i-1].str))))
+        {
+            ptr = ptr2;
+            req->cmd = &dns_commands[i-1];
+            break;
+        }
     }
-  strcpy(req->domain, ptr);
-  *ptr = 0;
+    strcpy(req->domain, ptr);
+    *ptr = 0;
 
-  len = (unsigned int) (ptr - output);
-  /* delete dots */
-  for (i=0,j=0; i < len; ++i)
+    len = (unsigned int) (ptr - output);
+    /* delete dots */
+    for (i=0,j=0; i < len; ++i)
     {
-      if (output[i] != '.')
-	{
-          if (i != j)
-            output[j] = output[i];
-	  ++j;
-	}
+        if (output[i] != '.')
+        {
+            if (i != j)
+                output[j] = output[i];
+            ++j;
+        }
     }
-  output[j] = 0;
-  return (0);
+    output[j] = 0;
+    return (0);
 }
 
 
@@ -113,36 +113,36 @@ static int	dns_strip_dot_and_domain(t_conf *conf, t_request *req, char *output)
 
 int		dns_decode(t_conf *conf, t_request *req, char *input, char *output)
 {
-  int		total_len = 0;
-  uint8_t	len;
-  char		*ptr;
+    int		total_len = 0;
+    uint8_t	len;
+    char		*ptr;
 
-  ptr = input;
-  *output = 0;
+    ptr = input;
+    *output = 0;
 
-  if (strlen(ptr) < (strlen(conf->my_domain) + 1))
-    return (-1);
-  while (*ptr)
+    if (strlen(ptr) < (strlen(conf->my_domain) + 1))
+        return (-1);
+    while (*ptr)
     {
-      len = (uint8_t) *ptr;
-      total_len += len;
-      if ((len > 63) || (total_len > MAX_HOST_NAME_ENCODED))
-	{
-	  MYERROR("NAME TOO long %d %d", len, total_len + len);
-	  return (-1);
-	}
-      strncat(output, ptr + 1, len);
-      output[total_len] = 0;
-      if (len)
-	{
-	  if (++total_len > MAX_HOST_NAME_ENCODED)
-	    return (-1);
-	  strcat(output , ".");
-	  len++;
-	}
-      ptr += (len);
+        len = (uint8_t) *ptr;
+        total_len += len;
+        if ((len > 63) || (total_len > MAX_HOST_NAME_ENCODED))
+        {
+            MYERROR("NAME TOO long %d %d", len, total_len + len);
+            return (-1);
+        }
+        strncat(output, ptr + 1, len);
+        output[total_len] = 0;
+        if (len)
+        {
+            if (++total_len > MAX_HOST_NAME_ENCODED)
+                return (-1);
+            strcat(output , ".");
+            len++;
+        }
+        ptr += (len);
     }
-  if (total_len > 0)
-    output[total_len -1 ] = 0;
-  return (dns_strip_dot_and_domain(conf, req, output));
+    if (total_len > 0)
+        output[total_len -1 ] = 0;
+    return (dns_strip_dot_and_domain(conf, req, output));
 }

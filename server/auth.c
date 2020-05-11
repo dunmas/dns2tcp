@@ -31,6 +31,7 @@
 #include "list.h"
 #include "requests.h"
 #include "base32.h"
+#include "base64.h"
 #include "myrand.h"
 #include "socket.h"
 #include "queue.h"

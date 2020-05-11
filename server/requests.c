@@ -29,6 +29,7 @@
 #include "dns_decode.h"
 #include "list.h" 
 #include "base32.h"
+#include "base64.h"
 #include "myerror.h"
 #include "queue.h"
 #include "mystrnlen.h"
@@ -56,23 +57,23 @@ const t_command dns_commands[]= {
 
 static uint16_t		get_type_request(t_request *req)
 {
-  struct dns_hdr	*hdr;
-  char 			*ptr;
-  uint16_t		type;
+    struct dns_hdr	*hdr;
+    char 			*ptr;
+    uint16_t		type;
 
-  if (sizeof(struct dns_hdr) > req->len)
-    return (0);
-  hdr =  (struct dns_hdr *) req->data;
-  if (hdr->qdcount > 0)
+    if (sizeof(struct dns_hdr) > req->len)
+        return (0);
+    hdr =  (struct dns_hdr *) req->data;
+    if (hdr->qdcount > 0)
     {
-      ptr = memchr(JUMP_DNS_HDR(hdr), 0, req->len - sizeof(struct dns_hdr));
-      if (ptr)
+        ptr = memchr(JUMP_DNS_HDR(hdr), 0, req->len - sizeof(struct dns_hdr));
+        if (ptr)
         {
-	  type = ((struct req_hdr *) (ptr + 1))->qtype;
-	  return GET_16(&type);
-	}
+            type = ((struct req_hdr *) (ptr + 1))->qtype;
+            return GET_16(&type);
+        }
     }
-  return (0);
+    return (0);
 }
 
 
@@ -87,31 +88,31 @@ static uint16_t		get_type_request(t_request *req)
 
 int			get_request(t_conf *conf, t_request *req, t_data *output)
 {
-  unsigned char			buffer[MAX_HOST_NAME_ENCODED + 1];
-  int			len;
-  char			*query;
-  struct dns_hdr	*hdr;
+    unsigned char			buffer[MAX_HOST_NAME_ENCODED + 1];
+    int			len;
+    char			*query;
+    struct dns_hdr	*hdr;
 
 
-  query = JUMP_DNS_HDR(req->data);
-  hdr = (void *)req->data;
+    query = JUMP_DNS_HDR(req->data);
+    hdr = (void *)req->data;
   
-  /* just a header -> drop */
-  if ((len = mystrnlen(query, (req->len - DNS_HDR_SIZE))) == (req->len - DNS_HDR_SIZE))
-    return (-1);
+    /* just a header -> drop */
+    if ((len = mystrnlen(query, (req->len - DNS_HDR_SIZE))) == (req->len - DNS_HDR_SIZE))
+        return (-1);
   
-  if (len > (sizeof(buffer) -1))
+    if (len > (sizeof(buffer) -1))
     {
-      DPRINTF(2, "Request too long\n");
-      return (-1);
+        DPRINTF(2, "Request too long\n");
+        return (-1);
     }
-  if (dns_decode(conf, req, query, (char*) buffer) == -1)
+    if (dns_decode(conf, req, query, (char*) buffer) == -1)
     {
-      DPRINTF(2, "DNS decode error\n");
-      return (-1);
+        DPRINTF(2, "DNS decode error\n");
+        return (-1);
     }
-  DPRINTF(1, "Receive query : %s dns_id = 0x%x for domain %s\n", buffer, ntohs(hdr->id), req->domain);
-  return ((output->len = base32_decode((unsigned char *)output->buffer, buffer)));
+    DPRINTF(1, "Receive query : %s dns_id = 0x%x for domain %s\n", buffer, ntohs(hdr->id), req->domain);
+    return ((output->len = base64_decode((unsigned char *)output->buffer, buffer)));
 }
 
 /* 
@@ -127,35 +128,35 @@ int			get_request(t_conf *conf, t_request *req, t_data *output)
 
 int			send_reply(t_conf *conf, t_request *req, t_data *data)
 {
-  unsigned char			buffer[MAX_EDNS_LEN];
-  void			*where;
-  struct dns_hdr	*hdr;
-  t_packet		*packet;
-  uint16_t		packet_id;
+    unsigned char			buffer[MAX_EDNS_LEN];
+    void			*where;
+    struct dns_hdr	*hdr;
+    t_packet		*packet;
+    uint16_t		packet_id;
 
 
-  hdr = (struct dns_hdr *) req->data;
-  hdr->ra = 1;
-  hdr->aa = 1;
-  hdr->qr = 1;
+    hdr = (struct dns_hdr *) req->data;
+    hdr->ra = 1;
+    hdr->aa = 1;
+    hdr->qr = 1;
 
-  if (!(where = jump_end_query(req->data, GET_16(&hdr->qdcount), req->len)))
-    return (-1);
+    if (!(where = jump_end_query(req->data, GET_16(&hdr->qdcount), req->len)))
+        return (-1);
 
-  packet = (t_packet *)data->buffer;
-  packet_id = ntohs(packet->seq);
-  base32_encode((unsigned char*) data->buffer, buffer, data->len);
-  where = req->reply_functions->rr_add_reply(conf, req, hdr, where, (char*) buffer);
-  /* update request len */
-  req->len = where - (void *)req->data;
-  DPRINTF(1, "Sending [%d] len = %d dns id = 0x%x %s\n", packet_id, req->len, ntohs(hdr->id), buffer);
-  if ((sendto(conf->sd_udp, req->data, req->len, 
+    packet = (t_packet *)data->buffer;
+    packet_id = ntohs(packet->seq);
+    base64_encode((unsigned char*) data->buffer, buffer, data->len);
+    where = req->reply_functions->rr_add_reply(conf, req, hdr, where, (char*) buffer);
+    /* update request len */
+    req->len = where - (void *)req->data;
+    DPRINTF(1, "Sending [%d] len = %d dns id = 0x%x %s\n", packet_id, req->len, ntohs(hdr->id), buffer);
+    if ((sendto(conf->sd_udp, req->data, req->len, 
 	      0, (struct sockaddr *)&req->sa, sizeof(struct sockaddr))) != req->len)
     {
-      MYERROR("sendto error");
-      return (-1);
+        MYERROR("sendto error");
+        return (-1);
     }
-  return (0);
+    return (0);
 }
 /**
  * @brief send immediatly an error reply 
@@ -168,24 +169,24 @@ int			send_reply(t_conf *conf, t_request *req, t_data *data)
 
 int			send_ascii_reply(t_conf *conf, t_request *req, t_packet *packet, char *str)
 {
-  t_data		data;
-  char			buffer[MAX_EDNS_LEN];
-  int			len, max_len;
+    t_data		data;
+    char			buffer[MAX_EDNS_LEN];
+    int			len, max_len;
 
-  len = strlen(str) +  sizeof(t_packet);
-  max_len =  req->reply_functions->rr_available_len(req->data, NULL, req->len) + PACKET_LEN;
+    len = strlen(str) +  sizeof(t_packet);
+    max_len =  req->reply_functions->rr_available_len(req->data, NULL, req->len) + PACKET_LEN;
   
-  if (len > max_len) 
+    if (len > max_len) 
     {
-      LOG("Packet too long, try to add %d bytes on a %d bytes long request\n", len, req->len);
-      return (-1);
+        LOG("Packet too long, try to add %d bytes on a %d bytes long request\n", len, req->len);
+        return (-1);
     }
-  memcpy(buffer, packet, sizeof(t_packet));
-  strcpy(buffer + sizeof(t_packet), str);
+    memcpy(buffer, packet, sizeof(t_packet));
+    strcpy(buffer + sizeof(t_packet), str);
   
-  data.buffer = buffer;
-  data.len = len;
-  return (send_reply(conf, req, &data));
+    data.buffer = buffer;
+    data.len = len;
+    return (send_reply(conf, req, &data));
 }
 
 /**
@@ -194,37 +195,37 @@ int			send_ascii_reply(t_conf *conf, t_request *req, t_packet *packet, char *str
  **/
 
 int			get_incoming_request(t_conf *conf)
- {
-   char			recv_buffer[MAX_EDNS_LEN + 1];
-   char			domain[MAX_HOST_NAME_ENCODED];
-   char			input[MAX_HOST_NAME_ENCODED + 1];
-   t_request		req; /* req.data -> recv_buffer */
-   socklen_t		slen; 
-   uint16_t		type;
-   t_data		decoded_data; /* .data -> input */
+{
+    char			recv_buffer[MAX_EDNS_LEN + 1];
+    char			domain[MAX_HOST_NAME_ENCODED];
+    char			input[MAX_HOST_NAME_ENCODED + 1];
+    t_request		req; /* req.data -> recv_buffer */
+    socklen_t		slen; 
+    uint16_t		type;
+    t_data		decoded_data; /* .data -> input */
 
-   slen = sizeof(req.sa);
-   req.data = recv_buffer;
-   req.domain = domain;
-   req.cmd = 0;
-   decoded_data.buffer = input;
-   decoded_data.len = sizeof(input) - 1;
-   if (((req.len = recvfrom(conf->sd_udp, req.data, 
+    slen = sizeof(req.sa);
+    req.data = recv_buffer;
+    req.domain = domain;
+    req.cmd = 0;
+    decoded_data.buffer = input;
+    decoded_data.len = sizeof(input) - 1;
+    if (((req.len = recvfrom(conf->sd_udp, req.data, 
 			     MAX_DNS_LEN, 0, (struct sockaddr *)&req.sa, &slen)) <= 0 ))
-     return (-1);
-   /* Data buffer is always terminated by 0 */
-   ((char *)req.data)[req.len] = 0;
-   type = get_type_request(&req);
-   if (!type)
-     return (-1);
-   if ((req.reply_functions = get_rr_function_by_type(type)))
-     {
-       if (get_request(conf, &req, &decoded_data) <= 0)
-	 return (-1);
-       if (!req.cmd)
-	 return (queue_put_data(conf, &req, &decoded_data));       
-       if (!session_request(conf, &req, &decoded_data))
-	 return (0);
-     }
-   return (-1);
- }
+        return (-1);
+    /* Data buffer is always terminated by 0 */
+    ((char *)req.data)[req.len] = 0;
+    type = get_type_request(&req);
+    if (!type)
+        return (-1);
+    if ((req.reply_functions = get_rr_function_by_type(type)))
+    {
+        if (get_request(conf, &req, &decoded_data) <= 0)
+            return (-1);
+        if (!req.cmd)
+            return (queue_put_data(conf, &req, &decoded_data));       
+        if (!session_request(conf, &req, &decoded_data))
+            return (0);
+    }
+    return (-1);
+}

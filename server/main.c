@@ -44,33 +44,32 @@
 
 int			detach_process(t_conf *conf)
 {
-  int			fd;
-  pid_t                 pid;
-  FILE                  *pidfile;
+    int			fd;
+    pid_t                 pid;
+    FILE                  *pidfile;
 
-  if (!(pid = fork()))
+    if (!(pid = fork()))
     { /* child */
-      if (setsid() < 0)
-	{
-	  perror("");
-	  return (-1); 
-	}
-      if ((fd = open("/dev/null", O_RDWR)) == -1)
-	return (-1);
-      fclose(stdin);  fclose(stdout); fclose(stderr);
-      dup2(fd, 0); dup2(fd, 1); dup2(fd, 2);
-      close(fd);
-      return (0);
-      
+        if (setsid() < 0)
+        {
+            perror("");
+            return (-1); 
+        }
+        if ((fd = open("/dev/null", O_RDWR)) == -1)
+            return (-1);
+        fclose(stdin);  fclose(stdout); fclose(stderr);
+        dup2(fd, 0); dup2(fd, 1); dup2(fd, 2);
+        close(fd);
+        return (0);
     }
-  if (! (pidfile = fopen((conf->pidfile == 0)? DEFAULT_PIDFILE: conf->pidfile,  "w")))
+    if (! (pidfile = fopen((conf->pidfile == 0)? DEFAULT_PIDFILE: conf->pidfile,  "w")))
     {
-      LOG("Could not open pidfile %s\n", conf->pidfile? conf->pidfile : DEFAULT_PIDFILE);
-      exit (0);
+        LOG("Could not open pidfile %s\n", conf->pidfile? conf->pidfile : DEFAULT_PIDFILE);
+        exit (0);
     }
-  fprintf(pidfile, "%ld\n", (long) pid);
-  fclose(pidfile);
-  exit (0);
+    fprintf(pidfile, "%ld\n", (long) pid);
+    fclose(pidfile);
+    exit (0);
 }
 
 /*
@@ -80,102 +79,101 @@ int			detach_process(t_conf *conf)
 
 void			load_resolv(t_conf *conf)
 {
-  struct addrinfo	*res;
-  struct addrinfo	hints;
-  char			*domain;
+    struct addrinfo	*res;
+    struct addrinfo	hints;
+    char			*domain;
 
-  memset(&hints, 0, sizeof(hints));
+    memset(&hints, 0, sizeof(hints));
 
-  hints.ai_flags    = AI_CANONNAME;
-  hints.ai_family   = PF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags    = AI_CANONNAME;
+    hints.ai_family   = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
 
-  /* 
+    /* 
      jump the subdomain, do not try to resolv ourself 
      because we are not a real DNS server
-  */
-  if (!(domain = strchr(conf->my_domain, '.'))
-      || (!*++domain))
-    domain = conf->my_domain;
-  if (!getaddrinfo(domain, NULL, &hints, &res))
-    freeaddrinfo(res);
+    */
+    if (!(domain = strchr(conf->my_domain, '.')) || (!*++domain))
+        domain = conf->my_domain;
+    if (!getaddrinfo(domain, NULL, &hints, &res))
+        freeaddrinfo(res);
 }
 
 int			jail(t_conf *conf)
 {
-  struct passwd		*pwd = 0;
-  FILE			*pid_file;
+    struct passwd		*pwd = 0;
+    FILE			*pid_file;
 
-  if (!conf->foreground)
-    detach_process(conf);
-  if ((conf->user) && (!(pwd = getpwnam(conf->user))))
+    if (!conf->foreground)
+        detach_process(conf);
+    if ((conf->user) && (!(pwd = getpwnam(conf->user))))
     {
-      LOG("User unknown %s", conf->user);
-      return (-1);
+        LOG("User unknown %s", conf->user);
+        return (-1);
     }
-  if (conf->pid_file)
+    if (conf->pid_file)
     {
-      pid_file = fopen(conf->pid_file, "w");
-      if (pid_file)
+        pid_file = fopen(conf->pid_file, "w");
+        if (pid_file)
         {
-          fprintf(pid_file, "%d\n", getpid());
-          fclose(pid_file);
+            fprintf(pid_file, "%d\n", getpid());
+            fclose(pid_file);
         }
-      else
+        else
         {
-	  LOG("Failed to write pidfile");
-	  return (-1);
+            LOG("Failed to write pidfile");
+            return (-1);
         }
     }
-  if (conf->chroot)
+    if (conf->chroot)
     {
-      DPRINTF(1, "Chroot to %s\n", conf->chroot);
-      load_resolv(conf);
-      if ((chroot(conf->chroot) == -1) || chdir("/"))
-	{
-	  LOG("Failed to chroot in %s\n", conf->chroot);
-	  return (-1);
-	}
+        DPRINTF(1, "Chroot to %s\n", conf->chroot);
+        load_resolv(conf);
+        if ((chroot(conf->chroot) == -1) || chdir("/"))
+        {
+            LOG("Failed to chroot in %s\n", conf->chroot);
+            return (-1);
+        }
     }
-  if (pwd) 
+    if (pwd) 
     {
-      DPRINTF(1, "Change to user %s\n", conf->user);
-      if (setgroups(0, NULL) || setgid(pwd->pw_gid) || setuid(pwd->pw_uid))
-	{
-	  LOG("Failed to change to user %s\n", conf->user);
-	  return (-1);
-	}
+        DPRINTF(1, "Change to user %s\n", conf->user);
+        if (setgroups(0, NULL) || setgid(pwd->pw_gid) || setuid(pwd->pw_uid))
+        {
+            LOG("Failed to change to user %s\n", conf->user);
+            return (-1);
+        }
     }
 #ifdef RLIMIT_NPROC
-   struct rlimit		rlim;
+    struct rlimit		rlim;
  
-   /* fork() is not need anymore, disable it */
-   rlim.rlim_max = rlim.rlim_cur = 0;
-   if (setrlimit(RLIMIT_NPROC, &rlim))
-     return (-1);
+    /* fork() is not need anymore, disable it */
+    rlim.rlim_max = rlim.rlim_cur = 0;
+    if (setrlimit(RLIMIT_NPROC, &rlim))
+        return (-1);
 #endif
-  return (0);
+    return (0);
 }
 
 int			main(int argc, char **argv)
 {
-  t_conf		my_conf;
-  t_conf		*conf;
+    t_conf		my_conf;
+    t_conf		*conf;
 
-  conf = &my_conf;
-  if (get_option(argc, argv, conf))
-    return (-1);
-  openlog("dns2tcp", LOG_PID , LOG_SYSLOG);
-  signal(SIGPIPE, SIG_IGN);
-  if (!bind_socket_dns(conf))
+    conf = &my_conf;
+    if (get_option(argc, argv, conf))
+        return (-1);
+    openlog("dns2tcp", LOG_PID , LOG_SYSLOG);
+    signal(SIGPIPE, SIG_IGN);
+    if (!bind_socket_dns(conf))
     {
-      LOG("Starting Server v%s...", VERSION);
-      if (jail(conf))
-	return (-1);
-      srand(getpid()^time(0));
-      do_server(conf);
+        LOG("Starting Server v%s...", VERSION);
+        if (jail(conf))
+            return (-1);
+        srand(getpid()^time(0));
+        do_server(conf);
     }
-  closelog();
-  return (0);
+    closelog();
+    return (0);
 }
 

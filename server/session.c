@@ -38,26 +38,26 @@
 
 static uint16_t		new_sessionid(t_conf *conf)
 {
-  uint16_t		rand;
-  uint32_t		try = (1<<16) * 2;
-  uint8_t		bad = 0;
-  t_simple_list		*client;
+    uint16_t		rand;
+    uint32_t		try = (1<<16) * 2;
+    uint8_t		bad = 0;
+    t_simple_list		*client;
 
-  client = (t_simple_list *)conf->client;
-  while (!(rand = myrand()));
-  if (!client)
-    return (myrand());
-  do {
-    for (client = (t_simple_list *)conf->client; client; client = client->next)
-      {
-	if (client->session_id == rand)
-	  bad = 1;
-      }
-    if (!bad)
-      return (rand);
+    client = (t_simple_list *)conf->client;
     while (!(rand = myrand()));
-  } while (try--);
-  return (0);
+    if (!client)
+        return (myrand());
+    do {
+        for (client = (t_simple_list *)conf->client; client; client = client->next)
+        {
+            if (client->session_id == rand)
+            bad = 1;
+        }
+        if (!bad)
+            return (rand);
+        while (!(rand = myrand()));
+    } while (try--);
+    return (0);
 }
 
 /**
@@ -71,40 +71,40 @@ static uint16_t		new_sessionid(t_conf *conf)
 
 t_simple_list		*create_session(t_conf *conf)
 {
-  t_simple_list		*client;
-  uint16_t		rand;
+    t_simple_list		*client;
+    uint16_t		rand;
   
-  if (!(rand = new_sessionid(conf)))
-    return (0);
-  client = (t_simple_list *)conf->client;
-  if (!client)
+    if (!(rand = new_sessionid(conf)))
+        return (0);
+    client = (t_simple_list *)conf->client;
+    if (!client)
     {
-      conf->client = list_create_simple_cell();
-      client = conf->client;
+        conf->client = list_create_simple_cell();
+        client = conf->client;
     }
-  else
+    else
     {
-      while (client->next)
-	client = client->next;
-      if (!(client->next = list_create_simple_cell()))
-	return (0);
-      client = client->next;
+        while (client->next)
+            client = client->next;
+        if (!(client->next = list_create_simple_cell()))
+            return (0);
+        client = client->next;
     }
-  client->session_id = rand;
-  client->saved_queue = 0;
+    client->session_id = rand;
+    client->saved_queue = 0;
   
-  if (!(client->queue = init_queue()))
+    if (!(client->queue = init_queue()))
     {
-      list_destroy_simple_cell(client);
-      LOG("No more memory\n");
-      return (0);
+        list_destroy_simple_cell(client);
+        LOG("No more memory\n");
+        return (0);
     }
-  client->saved_queue =  client->queue;
-  client->num_seq = 1;
-  client->sd_tcp = -1; /* No endpoint yet */
-  client->sd = -1; /* No endpoint yet */
-  client_update_timer(client);
-  return (client);
+    client->saved_queue =  client->queue;
+    client->num_seq = 1;
+    client->sd_tcp = -1; /* No endpoint yet */
+    client->sd = -1; /* No endpoint yet */
+    client_update_timer(client);
+    return (client);
 }
 
 
@@ -119,24 +119,24 @@ t_simple_list		*create_session(t_conf *conf)
 
 int			session_request(t_conf *conf, t_request *req, t_data *data)
 {
-  t_packet		*packet;
-  t_simple_list		*client;
+    t_packet		*packet;
+    t_simple_list		*client;
 
-  if (data->len < PACKET_LEN)
+    if (data->len < PACKET_LEN)
+        return (-1);
+    packet = (void *)data->buffer;
+    data->buffer[data->len] = 0;
+    if (!req->cmd->authenticated)
+        return (req->cmd->deal_cmd(conf, req, packet, 0));
+    client = find_client_by_session_id(conf, packet->session_id);
+    /* ----- Authenticated user below ---- */
+    //if ((!client) || (client->sd > 0))
+    //  {
+    //    packet->type = ERR;
+    //    return (send_ascii_reply(conf, req, packet, ERR_AUTH_FAILED));
+    //  }
+    if (client && client->control.authenticated)
+        /* deal_cmd is in request.c */
+        return (req->cmd->deal_cmd(conf, req, packet, client));
     return (-1);
-  packet = (void *)data->buffer;
-  data->buffer[data->len] = 0;
-  if (!req->cmd->authenticated)
-    return (req->cmd->deal_cmd(conf, req, packet, 0));
-  client = find_client_by_session_id(conf, packet->session_id);
-  /* ----- Authenticated user below ---- */
-  //if ((!client) || (client->sd > 0))
-  //  {
-  //    packet->type = ERR;
-  //    return (send_ascii_reply(conf, req, packet, ERR_AUTH_FAILED));
-  //  }
-  if (client && client->control.authenticated)
-  /* deal_cmd is in request.c */
-    return (req->cmd->deal_cmd(conf, req, packet, client));
-  return (-1);
 }

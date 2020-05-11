@@ -27,6 +27,7 @@
 
 #include "mycrypto.h"
 #include "base32.h"
+#include "base64.h"
 #include "server.h"
 #include "session.h"
 #include "dns.h"
@@ -52,16 +53,16 @@ void		queue_dump(t_simple_list *client);
  */
 t_list		*init_queue(void)
 {
-  int		nb;
-  t_list	*queue;
+    int		nb;
+    t_list	*queue;
 
-  if (!(queue = calloc(QUEUE_SIZE, sizeof(t_list))))
-    return (0);
-  for (nb=0; nb < QUEUE_SIZE-1; nb++)
-    queue[nb].next = &queue[nb+1];
-  queue[QUEUE_SIZE-1].next = NULL;
+    if (!(queue = calloc(QUEUE_SIZE, sizeof(t_list))))
+        return (0);
+    for (nb=0; nb < QUEUE_SIZE-1; nb++)
+        queue[nb].next = &queue[nb+1];
+    queue[QUEUE_SIZE-1].next = NULL;
 
-  return (queue);
+    return (queue);
 }
 
 /**
@@ -69,10 +70,10 @@ t_list		*init_queue(void)
  */
 int		delete_queue(t_list *queue)
 {
-  if (!queue)
-    return (-1);
-  free(queue);
-  return (0);
+    if (!queue)
+        return (-1);
+    free(queue);
+    return (0);
 }
 
 
@@ -81,13 +82,13 @@ int		delete_queue(t_list *queue)
  */
 void			queue_update_timer(t_list *queue)
 {
-  struct timeval	tv;
-  struct timezone	tz;
+    struct timeval	tv;
+    struct timezone	tz;
    
-  if (!(gettimeofday(&tv, &tz)))
+    if (!(gettimeofday(&tv, &tz)))
     {    
-      queue->timeout.tv_sec = tv.tv_sec + REQUEST_TIMEOUT;;
-      queue->timeout.tv_usec = tv.tv_usec + REQUEST_UTIMEOUT;
+        queue->timeout.tv_sec = tv.tv_sec + REQUEST_TIMEOUT;;
+        queue->timeout.tv_usec = tv.tv_usec + REQUEST_UTIMEOUT;
     }
 }
 
@@ -133,28 +134,28 @@ static int	queue_mark_received(t_list *queue, uint16_t seq)
 
 static int		queue_copy_data(t_simple_list *client, t_list *queue, t_packet *packet, int len)
 {
-  void			*data;
+    void			*data;
 
-  data = (void *)packet + PACKET_LEN;
-  if ((packet->type & DATA) == DATA) 
+    data = (void *)packet + PACKET_LEN;
+    if ((packet->type & DATA) == DATA) 
     {
-      memcpy(queue->peer.data, data, len - PACKET_LEN);
-      queue->peer.len = len - PACKET_LEN;
+        memcpy(queue->peer.data, data, len - PACKET_LEN);
+        queue->peer.len = len - PACKET_LEN;
     }
-  DPRINTF(2, "[queue_copy_data] client sess id is 0x%x    packet->type is %d\n", client->session_id, packet->type);
-  if (packet->type == NOP)
-    queue->peer.len = 0;
-  if (packet->type == DESAUTH)
-    return (-1);
-  queue->status = USED;
-  queue->peer.seq = packet->seq;
-  client->control.queue_full = 0;
-  /* WTF could be another queue ? */
-  if (queue == client->queue)
-    client->num_seq = packet->seq;
-  /* Update request timer */
-  queue_update_timer(queue);
-  return (0);
+    DPRINTF(2, "[queue_copy_data] client sess id is 0x%x    packet->type is %d\n", client->session_id, packet->type);
+    if (packet->type == NOP)
+        queue->peer.len = 0;
+    if (packet->type == DESAUTH)
+        return (-1);
+    queue->status = USED;
+    queue->peer.seq = packet->seq;
+    client->control.queue_full = 0;
+    /* WTF could be another queue ? */
+    if (queue == client->queue)
+        client->num_seq = packet->seq;
+    /* Update request timer */
+    queue_update_timer(queue);
+    return (0);
 }
 
 
@@ -190,38 +191,38 @@ static int		queue_send_data(t_conf *conf, t_list *queue)
 static void		queue_reply(t_conf *conf, t_simple_list *client, 
 				    t_list *queue, void *data, int data_len)
 {
-  t_packet		*packet;
-  char			buffer[MAX_EDNS_LEN - DNS_HDR_SIZE - REQ_HDR_SIZE ];
-  t_data		output_data;
-  t_request		req;
+    t_packet		*packet;
+    char			buffer[MAX_EDNS_LEN - DNS_HDR_SIZE - REQ_HDR_SIZE ];
+    t_data		output_data;
+    t_request		req;
 
-  req.data = queue->data;
-  req.len = queue->len;
-  req.reply_functions = queue->peer.reply_functions;
-  // FIXME bug ipv6 support
-  memcpy(&req.sa, &(queue->peer.sa), sizeof(struct sockaddr_in));
+    req.data = queue->data;
+    req.len = queue->len;
+    req.reply_functions = queue->peer.reply_functions;
+    // FIXME bug ipv6 support
+    memcpy(&req.sa, &(queue->peer.sa), sizeof(struct sockaddr_in));
 
-  output_data.buffer = buffer;
-  packet = (t_packet *)buffer;
-  packet->session_id = client->session_id;
-  packet->type = ACK ;
-  PUT_16(&packet->seq, queue->peer.seq);
-  packet->ack_seq = 0;
-  output_data.len = sizeof(t_packet);
-  if (data_len > 0)
+    output_data.buffer = buffer;
+    packet = (t_packet *)buffer;
+    packet->session_id = client->session_id;
+    packet->type = ACK ;
+    PUT_16(&packet->seq, queue->peer.seq);
+    packet->ack_seq = 0;
+    output_data.len = sizeof(t_packet);
+    if (data_len > 0)
     {
-      packet->type |= DATA;
-      memcpy((char *)(output_data.buffer)+PACKET_LEN, data, data_len);
-      output_data.len += data_len;
+        packet->type |= DATA;
+        memcpy((char *)(output_data.buffer)+PACKET_LEN, data, data_len);
+        output_data.len += data_len;
     }
-  if (data_len == -1)
-    packet->type = DESAUTH ;
-  if (!send_reply(conf, &req, &output_data))
+    if (data_len == -1)
+        packet->type = DESAUTH ;
+    if (!send_reply(conf, &req, &output_data))
     {
-      /* update queue len */
-      queue->len = req.len;
-      queue->status = SENT; 
-      queue_update_timer(queue);
+        /* update queue len */
+        queue->len = req.len;
+        queue->status = SENT; 
+        queue_update_timer(queue);
     }
 }
 
@@ -335,6 +336,7 @@ int			queue_flush_expired_data(t_conf *conf)
 		return (-1);
 	for (client = conf->client; client; client = client->next)
 	{
+        queue_dump(client);
 		for (queue = client->queue; queue ; queue = queue->next)
 		{
 			if  ((tv.tv_sec >  queue->timeout.tv_sec)  ||
@@ -555,6 +557,7 @@ void		queue_dump(t_simple_list *client)
         }
         printf("\n");
         client = client->next;
+        break;
     }
 }
 
@@ -624,17 +627,17 @@ static int		queue_copy_query(t_request *req, t_list *queue, uint16_t seq)
 
 static int		send_error(t_conf *conf, t_request *req, int code)
 {
-  struct dns_hdr	*hdr;  
+    struct dns_hdr	*hdr;  
   
-  hdr = (struct dns_hdr *) req->data;
+    hdr = (struct dns_hdr *) req->data;
 
-  hdr->ra = 1;
-  hdr->qr = 1;
-  hdr->rcode = code;
-  if ((sendto(conf->sd_udp, req->data, req->len, 0, 
+    hdr->ra = 1;
+    hdr->qr = 1;
+    hdr->rcode = code;
+    if ((sendto(conf->sd_udp, req->data, req->len, 0, 
 	      (struct sockaddr *)&req->sa, sizeof(struct sockaddr))) == -1)
-    MYERROR("sendto error");
-  return (-1);
+        MYERROR("sendto error");
+    return (-1);
 }
 
 /**
@@ -644,13 +647,13 @@ static int		send_error(t_conf *conf, t_request *req, int code)
 
 void			client_update_timer(t_simple_list *client)
 {
-  struct timeval	tv;
-  struct timezone	tz;
+    struct timeval	tv;
+    struct timezone	tz;
    
-  if (!(gettimeofday(&tv, &tz)))
+    if (!(gettimeofday(&tv, &tz)))
     {    
-      client->control.tv.tv_sec = tv.tv_sec + CLIENT_TIMEOUT;
-      client->control.tv.tv_usec = tv.tv_usec;
+        client->control.tv.tv_sec = tv.tv_sec + CLIENT_TIMEOUT;
+        client->control.tv.tv_usec = tv.tv_usec;
     }
 }
 
@@ -662,14 +665,14 @@ void			client_update_timer(t_simple_list *client)
 
 t_simple_list	*find_client_by_session_id(t_conf *conf, uint16_t session_id)
 {
-  t_simple_list	*client;
+    t_simple_list	*client;
 
-  for (client = conf->client; client; client = client->next)
+    for (client = conf->client; client; client = client->next)
     {
-      if (client->session_id == session_id)
-	return (client);
+        if (client->session_id == session_id)
+            return (client);
     }
-  return (0);
+    return (0);
 }
 
 /*
@@ -718,7 +721,7 @@ int		queue_put_data(t_conf *conf, t_request *req, t_data *decoded_data)
 	        diff = ((MAX_SEQ - client->num_seq) + packet->seq ); 
         else
 	        diff = packet->seq - client->num_seq ;
-        DPRINTF(2, "diff = %d\n", diff);
+        DPRINTF(2, "diff = %d   client->num_seq = %d\n", diff, client->num_seq);
         if ((diff > QUEUE_SIZE) || (!packet->seq))
 	    {
 	        DPRINTF(3, "seq %d not good diff %d\n", packet->seq, diff);
