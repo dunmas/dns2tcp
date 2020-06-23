@@ -44,7 +44,7 @@ t_rr_functions rr_function[] = {
 t_rr_functions		*get_rr_function_by_type(uint16_t type)
 {
     int			i = 0;
-  
+
     while (rr_function[i].type && (rr_function[i].type != type))
         i++;
     return (rr_function[i].type ? &rr_function[i] : 0);
@@ -121,4 +121,40 @@ int                     rr_decode_next_reply_raw(t_request *req, char *output, i
         return (0);
     /*  jump idx  ->  &buffer[1] */
     return (base32_decode((unsigned char *)output, (unsigned char *)&buffer[1]));
+}
+
+int decode_answer_sessionid(char *buffer, unsigned int len)
+{
+	void			*ptr;
+	struct rr_hdr	         *reply;
+	char                  base32[9];
+	char                  cleartext[6];
+	struct dns_hdr	*hdr;
+	struct rr_hdr		*answer;
+
+
+	hdr = (struct dns_hdr *) buffer;
+	if (!(ptr = jump_end_query(buffer, GET_16(&hdr->qdcount), len)))
+	{
+		fprintf(stderr, "invalid reply\n");
+		return (-1);
+	}
+
+	if ((answer = jump_qname(ptr, len - (int)((unsigned long)ptr - (unsigned long)hdr))) == 0)
+	{
+		fprintf(stderr, "invalid reply\n");
+		return (-1);
+	}
+	if ((GET_16(&answer->rdlength) + (uint16_t)((unsigned long)answer - (unsigned long)hdr)) > len)
+	{
+		fprintf(stderr, "invalid reply\n");
+		return (-1);
+	}
+
+	memcpy(base32, JUMP_RR_HDR(answer) + 2, 8);
+	base32[8] = 0;
+	base32_decode((unsigned char *)cleartext, (unsigned char *)base32);
+	cleartext[5] = 0;
+
+	return *((uint16_t*) cleartext);
 }

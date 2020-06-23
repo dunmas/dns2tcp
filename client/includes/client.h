@@ -57,6 +57,7 @@ typedef struct		s_conf {
   uint16_t		local_port;
   char			*remote_host;
   uint16_t		remote_port;
+  uint16_t		udp_port_bind;
   uint8_t		use_stdin;
   uint16_t		id;
   char			*domain;

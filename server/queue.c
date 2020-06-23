@@ -244,8 +244,8 @@ static int		queue_flush_incoming_data(t_simple_list *client)
 	    {
 	        if (write(client->sd_tcp, queue->peer.data, queue->peer.len) != queue->peer.len)
 	            return (-1);
-	        DPRINTF(1, "Flush Write %d bytes, crc = 0x%x \n", queue->peer.len, 
-	  	      crc16((const char*) queue->peer.data, queue->peer.len));
+	        DPRINTF(2, "Flush Write %d bytes, client 0x%x crc 0x%x seq %d\n", queue->peer.len, client->session_id,
+	  	        crc16((const char*) queue->peer.data, queue->peer.len), queue->info.num_seq);
 	        queue->peer.len = 0;
 	    }
         queue = queue->next;
@@ -266,7 +266,6 @@ static int	queue_change_root(t_simple_list *client)
 	t_list	*new_root;
 	t_list	*prev;
 
-    DPRINTF(3, "[queue_change_root]\n");
 	if (client->queue->status != RECEIVED)
 		return (0);
 	prev = client->queue;
@@ -464,16 +463,16 @@ int			queue_read_tcp(t_conf *conf, t_simple_list *client)
 	        {
 	            if ((len = read(client->sd_tcp, buffer, len)) < 1)
 	  	        {
-	  	            /* nothing to read : connection closed */
+	  	            DPRINTF(2, "Client 0x%x Nothing to read : connection closed\n", client->session_id);
 	  	            queue_reply(conf, client, queue, 0, -1);
 	  	            return (-1);
 	  	        }
-	            DPRINTF(3, "Read tcp %d bytes, crc = 0x%x\n", len, crc16((const char *)buffer, len));
+	            DPRINTF(3, "Read tcp %d bytes, client 0x%x crc 0x%x seq %d\n", len, client->session_id, crc16((const char *)buffer, len), queue->info.num_seq);
 	            
 	            queue_reply(conf, client, queue, buffer, len);
 	            return (0);
 	        }
-	        DPRINTF(1, "Query too long for a reply\n");
+	        DPRINTF(1, "Query too long for a reply. Client 0x%x\n", client->session_id);
 	    }
     }
     client->control.queue_full = 1;
@@ -729,7 +728,6 @@ int		queue_put_data(t_conf *conf, t_request *req, t_data *decoded_data)
         if ((queue = get_cell_in_queue(queue, diff)))
 	    {
 	        queue_copy_query(req, queue, packet->seq);
-            DPRINTF(1, "GOT %d BYTES\n", decoded_data->len);
 	        if (queue_deal_incoming_data(conf, client, queue, packet, decoded_data->len))
 	        {
                 if (client->sd != -1)
@@ -742,6 +740,7 @@ int		queue_put_data(t_conf *conf, t_request *req, t_data *decoded_data)
                     close(client->sd_tcp);
                     client->sd_tcp = -1;
                 }
+                DPRINTF(1, "Deleting client");
                 return (delete_client(conf, client));
 	        }
 	    }

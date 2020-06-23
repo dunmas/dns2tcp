@@ -101,6 +101,7 @@ t_rr_functions	*get_rr_function_by_name(char *);
 
 int rr_decode_next_reply_encode(t_request *, char *, int , int);
 int rr_decode_next_reply_raw(t_request *, char *, int , int);
+int decode_answer_sessionid(char *buffer, unsigned int len);
 
 #endif /* __RR_H__ */
 

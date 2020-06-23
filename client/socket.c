@@ -96,21 +96,20 @@ uint16_t		win_get_simple_reply(t_conf *conf, char *buffer, uint16_t id)
 	hdr = (struct dns_hdr	*) buffer;
 	while ((retval = WaitForSingleObject(conf->event_udp, conf->conn_timeout*1000)) != WAIT_FAILED)
     {
+		ResetEvent(conf->event_udp);
 		if (retval != WAIT_OBJECT_0)
 		{
 			fprintf(stderr, "No response from DNS %s\n", conf->dns_server);
 			return (0);
 		}
-		if ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
+		while ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
 		{
 			if (hdr->id == id)
+			{
 				return (len);
+			}
 			else
 				queue_get_udp_data(conf, buffer, len);
-		}
-		else
-		{
-			ResetEvent(conf->event_udp);
 		}
     }
 	MYERROR("Select error");
@@ -198,7 +197,7 @@ int			bind_socket(t_conf *conf)
 			MYERROR("WSAEvent error\n");
 #endif
 		if ((!set_nonblock(conf->sd))
-			&& (!listen(conf->sd, 10)))
+			&& (!listen(conf->sd, SOMAXCONN)))
 		{
 			fprintf(stderr, "Listening on port : %d\n", conf->local_port);
 			return (0);
@@ -248,6 +247,7 @@ socket_t		create_socket(t_conf *conf)
 {
     struct hostent        *hostent;
     socket_t		sd;
+	struct sockaddr_in sourceport;
 #ifdef _WIN32
     WSADATA		wsa;
 
@@ -261,11 +261,24 @@ socket_t		create_socket(t_conf *conf)
     conf->sa.sin_port = htons(53);
     memcpy(&conf->sa.sin_addr.s_addr, hostent->h_addr, sizeof(conf->sa.sin_addr.s_addr));
     conf->sa.sin_family = AF_INET;
+
     if ( ((sd = socket(PF_INET, SOCK_DGRAM, 0)) < 0) || (set_nonblock(sd)) )
     {
         MYERROR("socket error");
         return (-1);
     }
+	if (conf->udp_port_bind > 0)
+	{
+		sourceport.sin_family = AF_INET;
+		sourceport.sin_addr.s_addr = htonl(INADDR_ANY);
+		sourceport.sin_port = htons(conf->udp_port_bind); 
+		if (bind(sd, (struct sockaddr*) &sourceport, sizeof(sourceport)) < 0)
+		{
+			MYERROR("UDP bind error");
+			return (-1);
+		}
+		DPRINTF(1, "Bind UDP port to %d\n", conf->udp_port_bind);
+	}
     DPRINTF(3, "Create socket for dns : \'%s\' \n", conf->dns_server);
     return (sd);      
 }

@@ -96,7 +96,6 @@ int			queue_send(t_conf *conf, t_simple_list *client, t_list *queue)
 {
 	int			out_len;
 	struct timeval	tv;
-  
 #if 0
 	if (conf->query_size)
 		queue->len = add_edns(conf, queue->data, queue->len);
@@ -140,7 +139,7 @@ int			queue_resend(t_conf *conf, t_simple_list *client, t_list *queue)
 	queue->peer.old_id =  queue->peer.id;
 	queue->peer.id = hdr->id;
   
-	//DPRINTF(1, "Queue resend seq %d id = 0x%x   old id = 0x%x \n", queue->info.num_seq, ntohs(queue->peer.id), ntohs(queue->peer.old_id));
+	DPRINTF(2, "Queue resend seq %d id = 0x%x   old id = 0x%x \n", queue->info.num_seq, ntohs(queue->peer.id), ntohs(queue->peer.old_id));
 	queue_send(conf, client, queue);
 	return (0);
 }
@@ -293,6 +292,7 @@ int		write_to_client(t_conf *conf, t_simple_list *client, const char *buffer, in
     }
 #else
 	ret = write(client->fd_wo, &buffer[PACKET_LEN], total_len - PACKET_LEN);
+		
 	if (ret != total_len - PACKET_LEN) 
 	{
 		MYERROR("Fail to send data (err=%lu, handle=%x)\n", GetLastError(), client->fd_wo);
@@ -335,6 +335,7 @@ int			extract_data(t_conf *conf, t_simple_list *client, t_list *queue)
     {
 		packet = (t_packet *)buffer;
 		seq_tmp = ntohs(packet->seq); packet->seq = seq_tmp;
+
 		queue->info.num_seq = packet->seq;
 		if (packet->type == DESAUTH)
 		{
@@ -446,8 +447,11 @@ int		queue_flush(t_conf *conf, t_simple_list *client)
 	if (queue == client->queue)
 	{
 		DPRINTF(2, "[queue_flush] First queue is not in RECEIEVED state, id 0x%x\n", ntohs(queue->peer.id));
-		DPRINTF(2, "[queue_flush] Resending 0x%x id\n", ntohs(queue->peer.id));
-		queue_resend(conf, client, queue);
+		if (!queue->peer.old_id)
+		{
+			DPRINTF(2, "[queue_flush] 0x%x hasn't been resent. Resending\n", ntohs(queue->peer.id));
+			queue_resend(conf, client, queue);
+		}
 		return (-1);
 	}
 	return (queue_change_root(client, queue));
@@ -512,12 +516,17 @@ int			queue_get_udp_data(t_conf *conf, char *buffer, int len)
   
 	client = conf->client;
 	hdr = (struct dns_hdr *) buffer;
+	int sessionid_from_answer = decode_answer_sessionid(buffer, len);
+	DPRINTF(3, "Session id extracted from answer is 0x%x\n", sessionid_from_answer);
   
 	for (; client; client = client->next)
     {
+		if (sessionid_from_answer > -1 && sessionid_from_answer != client->session_id)
+			continue;
+
 		for (queue = client->queue; queue; queue = queue->next)
 		{
-			if ( (queue->status == SENT) && ( (queue->peer.id == hdr->id) 
+			if ( (queue->status == SENT) && ( (queue->peer.id == hdr->id)
 					    || (queue->peer.old_id && (queue->peer.old_id == hdr->id))))
 			{
 				if (hdr->rcode)
@@ -548,7 +557,6 @@ int			queue_get_udp_data(t_conf *conf, char *buffer, int len)
 				queue->data[len] = 0;
 				queue->len = len;
 				return (queue_flush(conf, client));
-			return (0);
 			}
 		}
     }
@@ -570,6 +578,7 @@ static int	windows_client_read(t_conf *conf, t_simple_list *client, t_list *queu
 		}
 		return (-1);
     }
+
 	return (len);
 }
 #endif

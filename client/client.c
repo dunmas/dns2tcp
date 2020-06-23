@@ -64,7 +64,7 @@ int		delete_client(t_conf *conf, t_simple_list *client)
 {
 	t_simple_list	*tmp;
   
-	DPRINTF(2, "free client \n");
+	DPRINTF(2, "free client 0x%x\n", client->session_id);
 
 	if (conf->client == client)
     {
@@ -283,11 +283,14 @@ int		add_rpf_client(t_conf *conf, socket_t fd_ro, socket_t fd_wo, uint16_t sessi
 }
 
 
-static int	check_incoming_ns_reply(t_conf *conf, char *buffer)
+static int	check_incoming_ns_reply(t_conf *conf)
 {
     int		len = 0;
+	char		buffer[MAX_EDNS_LEN + 1];
+	buffer[MAX_EDNS_LEN] = 0;
   
   /* Can be blocking here */
+	ResetEvent(conf->event_udp);
 	while ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
     {
 		if ((conf->client) && (queue_get_udp_data(conf, buffer, len)))
@@ -299,14 +302,12 @@ static int	check_incoming_ns_reply(t_conf *conf, char *buffer)
 #ifdef _WIN32
 	if (len < 0) 
     {
-		if (GetLastError() != WSAEWOULDBLOCK) 
+		if (GetLastError() != WSAEWOULDBLOCK)
 		{
 			DPRINTF(1, "failed to recv UDP data (%lu)\n", GetLastError());
 			return (-1);
 		}
     }
-	/* We can clear the event, we've read all data available */
-	ResetEvent(conf->event_udp);
 #endif
 	return (0);
 }
@@ -324,14 +325,6 @@ static int	check_incoming_client_data(t_conf *conf, t_fd_event *descriptors, int
 				if (queue_get_tcp_data(conf, client))
 					return (delete_client(conf, client));
 				return (0);
-#ifdef _WIN32
-			} 
-			else if (IS_THIS_SOCKET(0, client->control.aio.hEvent, descriptors, offset)) 
-			{
-				if (queue_get_tcp_data(conf, client))
-					return (delete_client(conf, client));
-				return  (0);
-#endif
 			}
 		}
     }
@@ -346,6 +339,7 @@ static int	check_incoming_client(t_conf *conf, t_fd_event *descriptors, int offs
 	if (socket_is_valid(conf->sd) 
 	&& (IS_THIS_SOCKET(conf->sd, conf->event_tcpsd, descriptors, offset)))
 	{
+		DPRINTF(2, "conf->sd accept event\n");
 		if ((sock = accept(conf->sd, 0, 0)) == -1)
 		{
 			MYERROR("accept");
@@ -353,9 +347,6 @@ static int	check_incoming_client(t_conf *conf, t_fd_event *descriptors, int offs
 			sock = -1;
 			return (-1);
 		}
-#ifdef _WIN32
-		ResetEvent(conf->event_tcpsd);
-#endif
 		if (add_client(conf, sock, sock))
 		{
 			MYERROR("add_client");
@@ -363,6 +354,20 @@ static int	check_incoming_client(t_conf *conf, t_fd_event *descriptors, int offs
 			sock = -1;
 			return (-1);
 		}
+
+		while ((sock = accept(conf->sd, 0, 0)) != -1)
+		{
+			if (add_client(conf, sock, sock))
+			{
+				MYERROR("add_client");
+				close(sock);
+				sock = -1;
+				return (-1);
+			}
+		}
+#ifdef _WIN32
+		ResetEvent(conf->event_tcpsd);
+#endif
 		return (0);
 	}
 	return (1);
@@ -380,10 +385,7 @@ static int	check_incoming_client(t_conf *conf, t_fd_event *descriptors, int offs
 
 static int	get_socket_data(t_conf *conf, t_fd_event *descriptors, int offset)
 {
-    char		buffer[MAX_EDNS_LEN+1];
     int		res;
-  
-    buffer[MAX_EDNS_LEN] = 0;
 
 #ifdef DEBUG
     t_simple_list  *client;
@@ -403,8 +405,8 @@ static int	get_socket_data(t_conf *conf, t_fd_event *descriptors, int offset)
 #endif
     
     /* Incoming NS packet */
-    if (IS_THIS_SOCKET(conf->sd_udp, conf->event_udp, descriptors, offset))
-        return (check_incoming_ns_reply(conf, (char *) buffer));
+	if (IS_THIS_SOCKET(conf->sd_udp, conf->event_udp, descriptors, offset))
+		return (check_incoming_ns_reply(conf));
 
     /* Incoming client packet */
     if ((res = check_incoming_client_data(conf, descriptors, offset)) != 1)
@@ -446,7 +448,7 @@ int		win_check_for_data(t_conf *conf, WSAEVENT *descriptors, int max_fd, struct 
 {
 	DWORD		retval;
   
-	retval = WaitForMultipleObjects(max_fd, descriptors, FALSE, tv->tv_sec * 1000);
+	retval = WaitForMultipleObjects(max_fd, descriptors, FALSE, 100);
 	if (retval == WAIT_FAILED)
     {
 		DPRINTF(1, "WaitForMultipleObjects error (%li)\n", GetLastError());
@@ -523,6 +525,7 @@ int			do_client(t_conf *conf)
             return (-1);
 #endif
 
+		//check_incoming_ns_reply(conf);
         check_for_resent(conf);
     }
     return (-1);

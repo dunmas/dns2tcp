@@ -142,6 +142,7 @@ void			delete_zombie(t_conf *conf)
                     close(client->sd);
                     client->sd = -1;
                 }
+                DPRINTF(2, "Deleting zombie client 0x%x\n", client->session_id);
                 delete_client(conf, client);
             }
         }
@@ -201,7 +202,6 @@ int			do_server(t_conf *conf)
         if (!has_red_udp && FD_ISSET(conf->sd_udp, &rfds))
         {
             has_red_udp = true;
-            DPRINTF(2, "READING DNS\n");
 	        get_incoming_request(conf);
         }
         else
@@ -214,7 +214,6 @@ int			do_server(t_conf *conf)
                 {
                     if (queue_read_tcp(conf, client))
                     {
-                        DPRINTF(2, "READING TCP\n");
                         if (client->sd_tcp != -1)
                         {
                             close(client->sd_tcp);
