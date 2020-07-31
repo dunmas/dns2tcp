@@ -290,7 +290,10 @@ static int	check_incoming_ns_reply(t_conf *conf)
 	buffer[MAX_EDNS_LEN] = 0;
   
   /* Can be blocking here */
+  
+#ifdef _WIN32
 	ResetEvent(conf->event_udp);
+#endif
 	while ((len = read(conf->sd_udp, buffer, MAX_DNS_LEN)) > 0)
     {
 		if ((conf->client) && (queue_get_udp_data(conf, buffer, len)))
