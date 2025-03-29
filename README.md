@@ -1,12 +1,11 @@
 
 # Note
 
-Dns2tcp is a tool for TCP port forwarding over DNS. There is only
-a simple identification mecanism but no encryption : DNS encapsulation
-must be considered as an unsecure and anonymous transport
-layer. It works similar to plink -L/-R options.
-It is based on old version of dns2tcp at https://github.com/alex-sector/dns2tcp
-with addition of port forwarding feature, bug fix and moving from b64 to b32.
+The source repository https://github.com/kirillwow/dns2tcp has a problem with processing the `server` parameter (it is missing) and compiling on modern systems (tested on `Ubuntu 22.04`).
+
+These errors have been fixed here, which allows you to run the tool in local networks with arbitrary DNS servers for access.
+
+The corrections were made at the cost of possible problems with displaying some error messages.
 
 ## How to build
 
@@ -34,7 +33,7 @@ with addition of port forwarding feature, bug fix and moving from b64 to b32.
 Local port forwarding, for example to run meterpreter over DNS tunnel.
 Listens to port 4444 on client side and forwards all connections to x.x.x.x:443 :
 ```sh
-	$ dns2tcpc.exe -z mydomain.com -k secretkey -t 3 -L 4444:x.x.x.x:443 <dns_server>
+	$ dns2tcpc.exe -z mydomain.com -k secretkey -t 3 -L 4444:x.x.x.x:443 -S <dns_server>
 	listening on port 4444
 	...
 	
@@ -44,7 +43,7 @@ Listens to port 4444 on client side and forwards all connections to x.x.x.x:443 
 Remote port forwarding, for example to make client SMB shares available to remote side.
 Opens port 1500 for listening on server side and forwards all connections from remote to 127.0.0.1:445 :
 ```sh
-        $ dns2tcpc.exe -z mydomain.com -k secretkey -t 3 -R 1500:127.0.0.1:445 <dns_server>
+        $ dns2tcpc.exe -z mydomain.com -k secretkey -t 3 -R 1500:127.0.0.1:445 -S <dns_server>
         Connected to port : 445
         ...
 
@@ -73,5 +72,5 @@ File configuration :
 
 # Known Bugs
 
-dns2tcpd server not supported on Windows
+dns2tcpd server not supported on Windows (not a big problem for security testers btw)
 
