@@ -68,7 +68,7 @@ static void	usage(char *name)
         "\t-T <TXT|KEY>\t: DNS request type (default is TXT)\n"
         "\t-L <local port>:<remote host>:<remote port>\t: Local port forwarding like -L plink option\n"
         "\t-R <local port>:<remote host>:<remote port>\t: Remote port forwarding like -R plink option\n"
-        "\tserver\t: DNS server to use\n",
+        "\t-S <server_ip>\t: DNS server to use\n",
         name);
 }
 
@@ -244,7 +244,7 @@ int			get_option(int argc, char **argv, t_conf *conf)
 
     while (1)
     {
-        c = getopt (argc, argv, "b:cz:T:t:s:d:L:R:k:");
+        c = getopt (argc, argv, "b:cz:T:t:s:d:L:R:k:S:");
         if (c == -1)
             break;
         switch (c) {
@@ -323,6 +323,10 @@ int			get_option(int argc, char **argv, t_conf *conf)
                     return (-1);
                 }
                 conf->conn_timeout = (uint8_t) c;
+                break;
+            case 'S':
+                conf->dns_server = optarg;
+                printf("DNS server for initial request: %s\n", conf->dns_server);
                 break;
             default:
                 usage(argv[0]);

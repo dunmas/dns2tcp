@@ -44,6 +44,8 @@
  * @retval -1 on error
  **/
 
+int debug = 0;
+
 int			main(int argc, char **argv)
 {
     t_conf		conf;
