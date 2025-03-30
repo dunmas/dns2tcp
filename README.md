@@ -23,6 +23,7 @@ The corrections were made at the cost of possible problems with displaying some 
 	$ "C:\Program Files\mingw-w64\x86_64-8.1.0-win32-seh-rt_v6-rev0\mingw64\bin\gcc.exe" -I ..\common\includes -I includes *.c ..\common\*.c -l ws2_32 -l iphlpapi -o dns2tcpc.exe
 	$ dns2tcpc.exe
 
+MinGW download link: https://github.com/rcpacini/mingw-w64/blob/master/MinGW-W64%20GCC-8.1.0/x86_64-8.1.0-release-win32-seh-rt_v6-rev0.7z
 
 ## Examples
 
